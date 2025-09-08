@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Session</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: #25D366;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar h1 {
+            font-size: 24px;
+        }
+
+        .navbar .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .session-header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .session-header h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .session-status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-waiting_for_qr {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .api-info-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+
+        .token-info {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .token-info h4 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .token-display {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .copy-btn {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #128C7E;
+        }
+
+        .contacts-section, .messaging-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .section-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .section-header h3 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .section-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .contacts-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .contact-item:last-child {
+            border-bottom: none;
+        }
+
+        .contact-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .contact-checkbox {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+
+        .contact-info {
+            flex: 1;
+        }
+
+        .contact-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .contact-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .contact-type {
+            background: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .messaging-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .selected-contacts {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 60px;
+        }
+
+        .selected-contacts.empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .contact-tag {
+            display: inline-block;
+            background: #25D366;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 2px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #25D366;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #128C7E;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .button-group .btn {
+            flex: 1;
+        }
+        
+        .file-info {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .message-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .message-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .message-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .loading-note {
+            font-size: 14px;
+            color: #888;
+            font-style: italic;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #25D366;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .navbar {
+                padding: 15px 20px;
+            }
+            
+            .container {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>WhatsApp Session</h1>
+        <div class="nav-actions">
+            <a href="/dashboard" class="back-btn">← Back to Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="session-header">
+            <h2 id="sessionName">Loading Session...</h2>
+            <div class="session-status" id="sessionStatus">Loading...</div>
+        </div>
+
+        <!-- قسم معلومات API والتوكن -->
+        <div class="api-info-section">
+            <div class="section-header">
+                <h3>🔑 معلومات API</h3>
+                <p>معلومات التوكن الخاص بهذه الجلسة</p>
+            </div>
+            <div id="tokenInfo">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>جاري تحميل معلومات التوكن...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="mainContent">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading session data...</p>
+                <p class="loading-note">Please wait while we fetch your WhatsApp contacts and chats...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket;
+        let sessionId;
+        let sessionData = null;
+        let selectedContacts = new Set();
+        let selectedFile = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get session ID from URL
+            const pathParts = window.location.pathname.split('/');
+            sessionId = pathParts[pathParts.length - 1];
+            
+            if (!sessionId || isNaN(sessionId)) {
+                showError('Invalid session ID');
+                return;
+            }
+
+            loadSessionData();
+            loadTokenInfo();
+            initializeSocket();
+        });
+
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('session_data', function(data) {
+                if (data.sessionId == sessionId) {
+                    sessionData = data;
+                    renderMainContent();
+                }
+            });
+            
+            socket.on('message_sent', function(data) {
+                showMessageStatus('Message sent successfully!', 'success');
+            });
+            
+            socket.on('message_error', function(data) {
+                showMessageStatus('Error sending message: ' + data.error, 'error');
+            });
+            
+            socket.on('session_error', function(data) {
+                showError('Session error: ' + data.error);
+            });
+            
+            socket.on('file_sent', function(data) {
+                showMessageStatus('File sent successfully!', 'success');
+            });
+            
+            socket.on('file_error', function(data) {
+                showMessageStatus('Error sending file: ' + data.error, 'error');
+            });
+        }
+
+        async function loadTokenInfo() {
+            try {
+                const response = await fetch(`/api/session/${sessionId}/token`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        renderTokenInfo(data);
+                    } else {
+                        showTokenError('فشل في تحميل معلومات التوكن');
+                    }
+                } else {
+                    showTokenError('فشل في تحميل معلومات التوكن');
+                }
+            } catch (error) {
+                console.error('Error loading token info:', error);
+                showTokenError('فشل في تحميل معلومات التوكن');
+            }
+        }
+
+        function renderTokenInfo(data) {
+            const tokenInfoDiv = document.getElementById('tokenInfo');
+            tokenInfoDiv.innerHTML = `
+                <div class="token-info">
+                    <h4>توكن الجلسة</h4>
+                    <div class="token-display">
+                        ${data.token}
+                        <button class="copy-btn" onclick="copyToClipboard('${data.token}')">نسخ</button>
+                    </div>
+                    <p><strong>معرف الجلسة:</strong> ${data.sessionId}</p>
+                    <p><strong>اسم الجلسة:</strong> ${data.sessionName}</p>
+                    <p><strong>الحالة:</strong> <span class="status-${data.status}">${data.status}</span></p>
+                    <button class="btn btn-primary" onclick="regenerateToken()">🔄 إعادة إنشاء التوكن</button>
+                </div>
+            `;
+        }
+
+        function showTokenError(message) {
+            const tokenInfoDiv = document.getElementById('tokenInfo');
+            tokenInfoDiv.innerHTML = `
+                <div class="token-info">
+                    <p style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px;">
+                        ${message}
+                    </p>
+                    <button class="btn btn-primary" onclick="loadTokenInfo()">🔄 إعادة المحاولة</button>
+                </div>
+            `;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // إظهار رسالة نجاح
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'تم النسخ!';
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#25D366';
+                }, 2000);
+            }).catch(function(err) {
+                console.error('فشل في النسخ:', err);
+            });
+        }
+
+        async function regenerateToken() {
+            try {
+                const response = await fetch('/api/regenerate-session-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sessionId: sessionId })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        // إعادة تحميل معلومات التوكن
+                        loadTokenInfo();
+                        showMessageStatus('تم إعادة إنشاء التوكن بنجاح!', 'success');
+                    } else {
+                        showMessageStatus('فشل في إعادة إنشاء التوكن', 'error');
+                    }
+                } else {
+                    showMessageStatus('فشل في إعادة إنشاء التوكن', 'error');
+                }
+            } catch (error) {
+                console.error('Error regenerating token:', error);
+                showMessageStatus('فشل في إعادة إنشاء التوكن', 'error');
+            }
+        }
+
+        async function loadSessionData() {
+            try {
+                const response = await fetch('/api/sessions');
+                if (response.ok) {
+                    const sessions = await response.json();
+                    const session = sessions.find(s => s.id == sessionId);
+                    
+                    if (session) {
+                        document.getElementById('sessionName').textContent = session.session_name;
+                        updateSessionStatus(session.status);
+                        
+                        if (session.status === 'connected') {
+                            // Check if we already have session data
+                            if (session.session_data) {
+                                try {
+                                    sessionData = JSON.parse(session.session_data);
+                                    renderMainContent();
+                                } catch (e) {
+                                    // If no session data, request it
+                                    socket.emit('get_session_data', { sessionId });
+                                }
+                            } else {
+                                // Request session data from server
+                                socket.emit('get_session_data', { sessionId });
+                            }
+                        } else if (session.status === 'waiting_for_qr') {
+                            document.getElementById('mainContent').innerHTML = `
+                                <div class="empty-state">
+                                    <h3>Waiting for QR Code</h3>
+                                    <p>This session is waiting for you to scan the QR code. Please go back to the dashboard and scan the QR code first.</p>
+                                    <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                                </div>
+                            `;
+                        } else if (session.status === 'disconnected') {
+                            document.getElementById('mainContent').innerHTML = `
+                                <div class="empty-state">
+                                    <h3>Session Disconnected</h3>
+                                    <p>This session is not connected. Please go back to the dashboard and start the session first.</p>
+                                    <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                                </div>
+                            `;
+                        } else {
+                            renderMainContent();
+                        }
+                    } else {
+                        showError('Session not found');
+                    }
+                } else {
+                    throw new Error('Failed to load session data');
+                }
+            } catch (error) {
+                console.error('Error loading session data:', error);
+                showError('Failed to load session data');
+            }
+        }
+
+        function updateSessionStatus(status) {
+            const statusElement = document.getElementById('sessionStatus');
+            statusElement.textContent = status.replace('_', ' ').toUpperCase();
+            statusElement.className = `session-status status-${status}`;
+        }
+
+        function renderMainContent() {
+            if (!sessionData) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="empty-state">
+                        <h3>Session Not Ready</h3>
+                        <p>This session is not connected or no data available. Please start the session from the dashboard first.</p>
+                        <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!sessionData.contacts || sessionData.contacts.length === 0) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Contacts Available</h3>
+                        <p>This session is connected but no contacts or chats were found. Please try refreshing the page or restart the session.</p>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Page</button>
+                        <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!sessionData.chats || sessionData.chats.length === 0) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Chats Available</h3>
+                        <p>This session is connected but no chats were found. Please try refreshing the page or restart the session.</p>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Page</button>
+                        <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!sessionData.contacts || sessionData.contacts.length === 0) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Contacts Available</h3>
+                        <p>This session is connected but no contacts were found. Please try refreshing the page or restart the session.</p>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Page</button>
+                        <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!sessionData.chats || sessionData.chats.length === 0) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Chats Available</h3>
+                        <p>This session is connected but no chats were found. Please try refreshing the page or restart the session.</p>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Page</button>
+                        <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                    </div>
+                `;
+                return;
+            }
+
+            document.getElementById('mainContent').innerHTML = `
+                <div class="main-content">
+                    <div class="contacts-section">
+                        <div class="section-header">
+                            <h3>Contacts & Chats</h3>
+                            <p>Select contacts to send messages to</p>
+                        </div>
+                        
+                        <div class="search-box">
+                            <input type="text" id="contactSearch" placeholder="Search contacts..." onkeyup="filterContacts()">
+                        </div>
+                        
+                        <div class="contacts-list" id="contactsList">
+                            ${renderContactsList()}
+                        </div>
+                    </div>
+                    
+                    <div class="messaging-section">
+                        <div class="section-header">
+                            <h3>Send Message</h3>
+                            <p>Send a message to selected contacts</p>
+                        </div>
+                        
+                        <div class="messaging-form">
+                            <div class="form-group">
+                                <label>Selected Contacts:</label>
+                                <div class="selected-contacts empty" id="selectedContacts">
+                                    No contacts selected
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="messageText">Message:</label>
+                                <textarea id="messageText" placeholder="Type your message here..."></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="fileInput">File (Optional):</label>
+                                <input type="file" id="fileInput" accept="image/*,video/*,audio/*,application/*" onchange="handleFileSelect()">
+                                <small class="file-info" id="fileInfo"></small>
+                            </div>
+                            
+                            <div class="message-status" id="messageStatus"></div>
+                            
+                            <div class="button-group">
+                                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn" disabled>
+                                    Send Message
+                                </button>
+                                <button class="btn btn-secondary" onclick="sendFile()" id="sendFileBtn" disabled>
+                                    Send File Only
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderContactsList() {
+            if (!sessionData || !sessionData.contacts) {
+                return '<div class="empty-state"><p>No contacts available</p></div>';
+            }
+
+            const allContacts = [...sessionData.contacts, ...sessionData.chats];
+            
+            return allContacts.map(contact => `
+                <div class="contact-item">
+                    <input type="checkbox" class="contact-checkbox" 
+                           value="${contact.id}" 
+                           onchange="toggleContact('${contact.id}', '${contact.name || contact.number}')">
+                    <div class="contact-info">
+                        <div class="contact-name">${contact.name || contact.number}</div>
+                        <div class="contact-details">
+                            ${contact.number ? contact.number : ''}
+                            <span class="contact-type">${contact.type || 'contact'}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterContacts() {
+            const searchTerm = document.getElementById('contactSearch').value.toLowerCase();
+            const contactItems = document.querySelectorAll('.contact-item');
+            
+            contactItems.forEach(item => {
+                const contactName = item.querySelector('.contact-name').textContent.toLowerCase();
+                const contactNumber = item.querySelector('.contact-details').textContent.toLowerCase();
+                
+                if (contactName.includes(searchTerm) || contactNumber.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function toggleContact(contactId, contactName) {
+            if (selectedContacts.has(contactId)) {
+                selectedContacts.delete(contactId);
+            } else {
+                selectedContacts.add(contactId);
+            }
+            
+            updateSelectedContactsDisplay();
+            updateSendButton();
+        }
+
+        function updateSelectedContactsDisplay() {
+            const container = document.getElementById('selectedContacts');
+            
+            if (selectedContacts.size === 0) {
+                container.innerHTML = 'No contacts selected';
+                container.classList.add('empty');
+            } else {
+                container.innerHTML = '';
+                container.classList.remove('empty');
+                
+                selectedContacts.forEach(contactId => {
+                    const contact = [...sessionData.contacts, ...sessionData.chats].find(c => c.id === contactId);
+                    const name = contact ? (contact.name || contact.number) : contactId;
+                    
+                    const tag = document.createElement('span');
+                    tag.className = 'contact-tag';
+                    tag.textContent = name;
+                    container.appendChild(tag);
+                });
+            }
+        }
+
+        function updateSendButton() {
+            const sendBtn = document.getElementById('sendBtn');
+            const sendFileBtn = document.getElementById('sendFileBtn');
+            const messageText = document.getElementById('messageText');
+            
+            // Enable send message button if contacts selected and message exists
+            if (selectedContacts.size > 0 && messageText && messageText.value.trim()) {
+                sendBtn.disabled = false;
+            } else {
+                sendBtn.disabled = true;
+            }
+            
+            // Enable send file button if contacts selected and file exists
+            if (selectedContacts.size > 0 && selectedFile) {
+                sendFileBtn.disabled = false;
+            } else {
+                sendFileBtn.disabled = true;
+            }
+        }
+
+        function sendMessage() {
+            const message = document.getElementById('messageText').value.trim();
+            
+            if (!message) {
+                showMessageStatus('Please enter a message', 'error');
+                return;
+            }
+            
+            if (selectedContacts.size === 0) {
+                showMessageStatus('Please select at least one contact', 'error');
+                return;
+            }
+            
+            if (socket) {
+                socket.emit('send_message', {
+                    sessionId: sessionId,
+                    contacts: Array.from(selectedContacts),
+                    message: message
+                });
+                
+                // Clear message
+                document.getElementById('messageText').value = '';
+                updateSendButton();
+                
+                showMessageStatus('Sending message...', 'success');
+            }
+        }
+
+        function showMessageStatus(message, type) {
+            const statusElement = document.getElementById('messageStatus');
+            statusElement.textContent = message;
+            statusElement.className = `message-status message-${type}`;
+            statusElement.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="empty-state">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        function handleFileSelect() {
+            const fileInput = document.getElementById('fileInput');
+            const fileInfo = document.getElementById('fileInfo');
+            const sendFileBtn = document.getElementById('sendFileBtn');
+            
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                selectedFile = file;
+                
+                // Check file size (max 16MB for WhatsApp)
+                if (file.size > 16 * 1024 * 1024) {
+                    fileInfo.textContent = 'File too large (max 16MB)';
+                    fileInfo.style.color = '#dc3545';
+                    selectedFile = null;
+                    sendFileBtn.disabled = true;
+                    return;
+                }
+                
+                fileInfo.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                fileInfo.style.color = '#28a745';
+                sendFileBtn.disabled = selectedContacts.size === 0;
+            } else {
+                selectedFile = null;
+                fileInfo.textContent = '';
+                sendFileBtn.disabled = true;
+            }
+        }
+        
+        async function sendFile() {
+            if (selectedContacts.size === 0) {
+                showMessageStatus('Please select at least one contact', 'error');
+                return;
+            }
+            
+            if (!selectedFile) {
+                showMessageStatus('Please select a file', 'error');
+                return;
+            }
+            
+            if (socket) {
+                // Convert file to base64
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Data = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
+                    
+                    socket.emit('send_file', {
+                        sessionId: sessionId,
+                        contacts: Array.from(selectedContacts),
+                        fileData: base64Data,
+                        fileName: selectedFile.name,
+                        fileType: selectedFile.type,
+                        caption: document.getElementById('messageText').value.trim() || ''
+                    });
+                    
+                    // Clear file selection
+                    document.getElementById('fileInput').value = '';
+                    selectedFile = null;
+                    document.getElementById('fileInfo').textContent = '';
+                    document.getElementById('sendFileBtn').disabled = true;
+                    
+                    showMessageStatus('Sending file...', 'success');
+                };
+                
+                reader.readAsDataURL(selectedFile);
+            }
+        }
+        
+        // Handle message input changes
+        document.addEventListener('input', function(e) {
+            if (e.target.id === 'messageText') {
+                updateSendButton();
+            }
+        });
+    </script>
+</body>
+</html>

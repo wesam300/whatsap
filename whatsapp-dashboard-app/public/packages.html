@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الباقات - لوحة التحكم</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+        .package-card {
+            transition: transform 0.3s ease;
+        }
+        .package-card:hover {
+            transform: translateY(-5px);
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .feature-list li:before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-boxes me-2"></i>
+                إدارة الباقات
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="dashboard.html">
+                    <i class="fas fa-tachometer-alt me-1"></i>
+                    لوحة التحكم
+                </a>
+                <a class="nav-link" href="admin.html">
+                    <i class="fas fa-cog me-1"></i>
+                    الإعدادات
+                </a>
+                <a class="nav-link" href="#" onclick="logout()">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    تسجيل الخروج
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2><i class="fas fa-boxes me-2"></i>إدارة الباقات</h2>
+                <p class="text-muted">إدارة باقات الاشتراك وأسعارها ومميزاتها</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-primary" onclick="showAddPackageModal()">
+                    <i class="fas fa-plus me-1"></i>
+                    إضافة باقة جديدة
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary" id="totalPackages">0</h5>
+                        <p class="card-text">إجمالي الباقات</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-success" id="activeSubscriptions">0</h5>
+                        <p class="card-text">الاشتراكات النشطة</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning" id="totalSubscriptions">0</h5>
+                        <p class="card-text">إجمالي الاشتراكات</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-info" id="expiredSubscriptions">0</h5>
+                        <p class="card-text">الاشتراكات المنتهية</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Packages List -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    قائمة الباقات
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="packagesList" class="row">
+                    <!-- Packages will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Package Modal -->
+    <div class="modal fade" id="packageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="packageModalTitle">إضافة باقة جديدة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="packageForm">
+                        <input type="hidden" id="packageId">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packageName" class="form-label">اسم الباقة *</label>
+                                    <input type="text" class="form-control" id="packageName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packagePrice" class="form-label">السعر *</label>
+                                    <input type="number" class="form-control" id="packagePrice" step="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packageCurrency" class="form-label">العملة</label>
+                                    <select class="form-select" id="packageCurrency">
+                                        <option value="USD">دولار أمريكي (USD)</option>
+                                        <option value="SAR">ريال سعودي (SAR)</option>
+                                        <option value="EUR">يورو (EUR)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packageDuration" class="form-label">مدة الباقة (بالأيام) *</label>
+                                    <input type="number" class="form-control" id="packageDuration" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packageMaxSessions" class="form-label">الحد الأقصى للجلسات *</label>
+                                    <input type="number" class="form-control" id="packageMaxSessions" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="packageStatus" class="form-label">الحالة</label>
+                                    <select class="form-select" id="packageStatus">
+                                        <option value="true">نشط</option>
+                                        <option value="false">غير نشط</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="packageDescription" class="form-label">وصف الباقة</label>
+                            <textarea class="form-control" id="packageDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">المميزات</label>
+                            <div id="featuresContainer">
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control feature-input" placeholder="أضف ميزة جديدة">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="addFeature()">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="savePackage()">حفظ الباقة</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">إعدادات النظام</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="settingsForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="adminPhone" class="form-label">رقم هاتف الأدمن</label>
+                                    <input type="text" class="form-control" id="adminPhone">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="adminEmail" class="form-label">بريد الأدمن الإلكتروني</label>
+                                    <input type="email" class="form-control" id="adminEmail">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="supportWhatsapp" class="form-label">رقم واتساب الدعم</label>
+                                    <input type="text" class="form-control" id="supportWhatsapp">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="companyName" class="form-label">اسم الشركة</label>
+                                    <input type="text" class="form-control" id="companyName">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="companyAddress" class="form-label">عنوان الشركة</label>
+                            <textarea class="form-control" id="companyAddress" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="termsConditions" class="form-label">الشروط والأحكام</label>
+                            <textarea class="form-control" id="termsConditions" rows="4"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="privacyPolicy" class="form-label">سياسة الخصوصية</label>
+                            <textarea class="form-control" id="privacyPolicy" rows="4"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSettings()">حفظ الإعدادات</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="notification-system.js"></script>
+    <script>
+        let packages = [];
+        let systemSettings = {};
+
+        // تحميل البيانات عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPackages();
+            loadStats();
+            loadSystemSettings();
+        });
+
+        // تحميل الباقات
+        async function loadPackages() {
+            try {
+                const response = await fetch('/api/packages');
+                const result = await response.json();
+                
+                if (result.success) {
+                    packages = result.data;
+                    displayPackages();
+                } else {
+                    notificationSystem.error('خطأ في تحميل الباقات');
+                }
+            } catch (error) {
+                notificationSystem.error('خطأ في الاتصال بالخادم');
+            }
+        }
+
+        // عرض الباقات
+        function displayPackages() {
+            const container = document.getElementById('packagesList');
+            container.innerHTML = '';
+
+            packages.forEach(package => {
+                const features = Array.isArray(package.features) ? package.features : [];
+                const card = `
+                    <div class="col-md-4 mb-4">
+                        <div class="card package-card h-100">
+                            <div class="card-header">
+                                <h5 class="mb-0">${package.name}</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <h3 class="text-primary">${package.price} ${package.currency}</h3>
+                                    <p class="text-muted">لمدة ${package.duration_days} يوم</p>
+                                </div>
+                                <p class="card-text">${package.description || ''}</p>
+                                <ul class="feature-list">
+                                    ${features.map(feature => `<li>${feature}</li>`).join('')}
+                                </ul>
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        <i class="fas fa-users me-1"></i>
+                                        حتى ${package.max_sessions} جلسة
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <div class="btn-group w-100" role="group">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="editPackage(${package.id})">
+                                        <i class="fas fa-edit me-1"></i>تعديل
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="deletePackage(${package.id})">
+                                        <i class="fas fa-trash me-1"></i>حذف
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        // تحميل الإحصائيات
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.data.subscriptions;
+                    document.getElementById('totalPackages').textContent = packages.length;
+                    document.getElementById('activeSubscriptions').textContent = stats.active_subscriptions || 0;
+                    document.getElementById('totalSubscriptions').textContent = stats.total_subscriptions || 0;
+                    document.getElementById('expiredSubscriptions').textContent = stats.expired_subscriptions || 0;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // تحميل إعدادات النظام
+        async function loadSystemSettings() {
+            try {
+                const response = await fetch('/api/system/settings');
+                const result = await response.json();
+                
+                if (result.success) {
+                    systemSettings = result.data;
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        // إظهار modal إضافة باقة
+        function showAddPackageModal() {
+            document.getElementById('packageModalTitle').textContent = 'إضافة باقة جديدة';
+            document.getElementById('packageForm').reset();
+            document.getElementById('packageId').value = '';
+            clearFeatures();
+            addFeature(); // إضافة صف فارغ واحد
+            new bootstrap.Modal(document.getElementById('packageModal')).show();
+        }
+
+        // تعديل باقة
+        function editPackage(id) {
+            const package = packages.find(p => p.id === id);
+            if (!package) return;
+
+            document.getElementById('packageModalTitle').textContent = 'تعديل الباقة';
+            document.getElementById('packageId').value = package.id;
+            document.getElementById('packageName').value = package.name;
+            document.getElementById('packageDescription').value = package.description || '';
+            document.getElementById('packagePrice').value = package.price;
+            document.getElementById('packageCurrency').value = package.currency;
+            document.getElementById('packageDuration').value = package.duration_days;
+            document.getElementById('packageMaxSessions').value = package.max_sessions;
+            document.getElementById('packageStatus').value = package.is_active.toString();
+
+            clearFeatures();
+            const features = Array.isArray(package.features) ? package.features : [];
+            features.forEach(feature => addFeature(feature));
+
+            new bootstrap.Modal(document.getElementById('packageModal')).show();
+        }
+
+        // حذف باقة
+        async function deletePackage(id) {
+            notificationSystem.confirm(
+                'هل أنت متأكد من حذف هذه الباقة؟',
+                'تأكيد الحذف',
+                async () => {
+                    try {
+                        const response = await fetch(`/api/admin/packages/${id}`, {
+                            method: 'DELETE'
+                        });
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            notificationSystem.success('تم حذف الباقة بنجاح');
+                            loadPackages();
+                            loadStats();
+                        } else {
+                            notificationSystem.error(result.error);
+                        }
+                    } catch (error) {
+                        notificationSystem.error('خطأ في حذف الباقة');
+                    }
+                }
+            );
+        }
+
+        // حفظ الباقة
+        async function savePackage() {
+            const form = document.getElementById('packageForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const packageId = document.getElementById('packageId').value;
+            const features = Array.from(document.querySelectorAll('.feature-input'))
+                .map(input => input.value.trim())
+                .filter(value => value.length > 0);
+
+            const packageData = {
+                name: document.getElementById('packageName').value,
+                description: document.getElementById('packageDescription').value,
+                price: parseFloat(document.getElementById('packagePrice').value),
+                currency: document.getElementById('packageCurrency').value,
+                duration_days: parseInt(document.getElementById('packageDuration').value),
+                max_sessions: parseInt(document.getElementById('packageMaxSessions').value),
+                features: features
+            };
+
+            try {
+                const url = packageId ? `/api/admin/packages/${packageId}` : '/api/admin/packages';
+                const method = packageId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(packageData)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    notificationSystem.success(result.message);
+                    bootstrap.Modal.getInstance(document.getElementById('packageModal')).hide();
+                    loadPackages();
+                    loadStats();
+                } else {
+                    notificationSystem.error(result.error);
+                }
+            } catch (error) {
+                notificationSystem.error('خطأ في حفظ الباقة');
+            }
+        }
+
+        // إضافة ميزة
+        function addFeature(value = '') {
+            const container = document.getElementById('featuresContainer');
+            const featureDiv = document.createElement('div');
+            featureDiv.className = 'input-group mb-2';
+            featureDiv.innerHTML = `
+                <input type="text" class="form-control feature-input" placeholder="أضف ميزة جديدة" value="${value}">
+                <button type="button" class="btn btn-outline-danger" onclick="removeFeature(this)">
+                    <i class="fas fa-minus"></i>
+                </button>
+            `;
+            container.appendChild(featureDiv);
+        }
+
+        // إزالة ميزة
+        function removeFeature(button) {
+            button.parentElement.remove();
+        }
+
+        // مسح الميزات
+        function clearFeatures() {
+            const container = document.getElementById('featuresContainer');
+            container.innerHTML = '';
+        }
+
+        // حفظ إعدادات النظام
+        async function saveSettings() {
+            const settingsData = {
+                admin_phone: document.getElementById('adminPhone').value,
+                admin_email: document.getElementById('adminEmail').value,
+                support_whatsapp: document.getElementById('supportWhatsapp').value,
+                company_name: document.getElementById('companyName').value,
+                company_address: document.getElementById('companyAddress').value,
+                terms_conditions: document.getElementById('termsConditions').value,
+                privacy_policy: document.getElementById('privacyPolicy').value
+            };
+
+            try {
+                const response = await fetch('/api/admin/system/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settingsData)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    notificationSystem.success('تم حفظ الإعدادات بنجاح');
+                    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+                    loadSystemSettings();
+                } else {
+                    notificationSystem.error(result.error);
+                }
+            } catch (error) {
+                notificationSystem.error('خطأ في حفظ الإعدادات');
+            }
+        }
+
+        // تسجيل الخروج
+        function logout() {
+            fetch('/logout', { method: 'POST' })
+                .then(() => {
+                    window.location.href = 'login.html';
+                })
+                .catch(() => {
+                    window.location.href = 'login.html';
+                });
+        }
+    </script>
+</body>
+</html>

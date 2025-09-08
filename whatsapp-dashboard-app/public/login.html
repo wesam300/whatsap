@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Dashboard - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            max-width: 400px;
+            margin: 20px;
+        }
+
+        .header {
+            background: #25D366;
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .form-container {
+            padding: 40px 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .btn-primary {
+            background: #25D366;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #128C7E;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e1e5e9;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .toggle-form {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .toggle-form button {
+            background: none;
+            border: none;
+            color: #25D366;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: underline;
+        }
+
+        .toggle-form button:hover {
+            color: #128C7E;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>WhatsApp Dashboard</h1>
+            <p>Manage multiple WhatsApp sessions</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="form-container" id="loginForm">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #333;">Login</h2>
+            
+            <div class="error-message" id="loginError"></div>
+            
+            <div class="form-group">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" placeholder="Enter your username">
+            </div>
+            
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter your password">
+            </div>
+            
+            <button class="btn btn-primary" onclick="login()">Login</button>
+            
+            <div class="toggle-form">
+                <a href="register.html" style="color: #25D366; text-decoration: none; font-size: 14px;">ليس لديك حساب؟ سجل الآن</a>
+            </div>
+        </div>
+
+        <!-- Registration Form -->
+        <div class="form-container hidden" id="registerForm">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #333;">Register</h2>
+            
+            <div class="error-message" id="registerError"></div>
+            <div class="success-message" id="registerSuccess"></div>
+            
+            <div class="form-group">
+                <label for="registerUsername">Username</label>
+                <input type="text" id="registerUsername" placeholder="Choose a username">
+            </div>
+            
+            <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input type="password" id="registerPassword" placeholder="Choose a password">
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Confirm your password">
+            </div>
+            
+            <button class="btn btn-primary" onclick="register()">Register</button>
+            
+            <div class="toggle-form">
+                <button onclick="toggleForm()">Already have an account? Login</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleForm() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            if (loginForm.classList.contains('hidden')) {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            if (!username || !password) {
+                showError(errorDiv, 'Please fill in all fields');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = '/dashboard';
+                } else {
+                    showError(errorDiv, data.error || 'Login failed');
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('registerError');
+            const successDiv = document.getElementById('registerSuccess');
+            
+            if (!username || !password || !confirmPassword) {
+                showError(errorDiv, 'Please fill in all fields');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showError(errorDiv, 'Passwords do not match');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showError(errorDiv, 'Password must be at least 6 characters long');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(successDiv, 'Registration successful! You can now login.');
+                    // Clear form
+                    document.getElementById('registerUsername').value = '';
+                    document.getElementById('registerPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    showError(errorDiv, data.error || 'Registration failed');
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        function showError(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+            element.classList.remove('success-message');
+            element.classList.add('error-message');
+        }
+
+        function showSuccess(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+            element.classList.remove('error-message');
+            element.classList.add('success-message');
+        }
+
+        // Handle Enter key
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (document.getElementById('loginForm').classList.contains('hidden')) {
+                    register();
+                } else {
+                    login();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

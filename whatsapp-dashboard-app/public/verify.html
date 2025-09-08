@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحقق من البريد الإلكتروني - WhatsApp Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            direction: rtl;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2rem;
+            color: #25D366;
+            margin-bottom: 1rem;
+            font-weight: bold;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .description {
+            color: #666;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
+        .email {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+            color: #25D366;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .verification-code {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .verification-code input {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            font-size: 1.5rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .verification-code input:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-bottom: 1rem;
+        }
+
+        .btn:hover {
+            background: #128C7E;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .error {
+            color: #e74c3c;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .success {
+            color: #27ae60;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .resend-info {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .loading {
+            display: none;
+            margin: 1rem 0;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #25D366;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .timer {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📱 WhatsApp Dashboard</div>
+        <h1>تحقق من البريد الإلكتروني</h1>
+        
+        <div class="description">
+            تم إرسال رمز التحقق إلى بريدك الإلكتروني
+        </div>
+        
+        <div class="email" id="emailDisplay"></div>
+        
+        <form id="verifyForm">
+            <div class="form-group">
+                <label for="verificationCode">رمز التحقق</label>
+                <div class="verification-code">
+                    <input type="text" maxlength="1" class="code-input" data-index="0">
+                    <input type="text" maxlength="1" class="code-input" data-index="1">
+                    <input type="text" maxlength="1" class="code-input" data-index="2">
+                    <input type="text" maxlength="1" class="code-input" data-index="3">
+                    <input type="text" maxlength="1" class="code-input" data-index="4">
+                    <input type="text" maxlength="1" class="code-input" data-index="5">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" id="verifyBtn">تحقق من الرمز</button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>جاري التحقق...</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        <div class="success" id="success"></div>
+        
+        <button class="btn btn-secondary" id="resendBtn" disabled>إعادة إرسال الرمز</button>
+        <div class="timer" id="timer"></div>
+        
+        <div class="resend-info">
+            لم تستلم الرمز؟ تحقق من مجلد الرسائل غير المرغوب فيها
+        </div>
+    </div>
+
+    <script>
+        // Get email from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const email = urlParams.get('email');
+        
+        if (email) {
+            document.getElementById('emailDisplay').textContent = email;
+        }
+
+        // Auto-focus next input in verification code
+        const codeInputs = document.querySelectorAll('.code-input');
+        codeInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                if (e.target.value.length === 1) {
+                    if (index < codeInputs.length - 1) {
+                        codeInputs[index + 1].focus();
+                    }
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                    codeInputs[index - 1].focus();
+                }
+            });
+        });
+
+        // Timer for resend button
+        let timeLeft = 60;
+        const timerElement = document.getElementById('timer');
+        const resendBtn = document.getElementById('resendBtn');
+
+        function updateTimer() {
+            if (timeLeft > 0) {
+                timerElement.textContent = `يمكنك إعادة الإرسال خلال ${timeLeft} ثانية`;
+                timeLeft--;
+                setTimeout(updateTimer, 1000);
+            } else {
+                timerElement.textContent = '';
+                resendBtn.disabled = false;
+            }
+        }
+
+        updateTimer();
+
+        // Resend verification code
+        resendBtn.addEventListener('click', async () => {
+            resendBtn.disabled = true;
+            timeLeft = 60;
+            updateTimer();
+
+            try {
+                const response = await fetch('/api/resend-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('success').textContent = 'تم إعادة إرسال رمز التحقق';
+                    setTimeout(() => {
+                        document.getElementById('success').textContent = '';
+                    }, 3000);
+                } else {
+                    document.getElementById('error').textContent = data.error || 'حدث خطأ أثناء إعادة الإرسال';
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = 'حدث خطأ في الاتصال';
+            }
+        });
+
+        // Verify code
+        document.getElementById('verifyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const code = Array.from(codeInputs).map(input => input.value).join('');
+            
+            if (code.length !== 6) {
+                document.getElementById('error').textContent = 'يرجى إدخال رمز التحقق المكون من 6 أرقام';
+                return;
+            }
+
+            // Reset messages
+            document.getElementById('error').textContent = '';
+            document.getElementById('success').textContent = '';
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('verifyBtn').disabled = true;
+            
+            try {
+                const response = await fetch('/api/verify-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        code
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('success').textContent = 'تم التحقق من البريد الإلكتروني بنجاح!';
+                    
+                    // Redirect to login page after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
+                } else {
+                    document.getElementById('error').textContent = data.error || 'رمز التحقق غير صحيح';
+                    // Clear the code inputs
+                    codeInputs.forEach(input => input.value = '');
+                    codeInputs[0].focus();
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = 'حدث خطأ في الاتصال';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('verifyBtn').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

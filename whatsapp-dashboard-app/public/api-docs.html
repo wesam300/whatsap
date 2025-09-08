@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وثائق API - WhatsApp Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            direction: rtl;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: #25D366;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #25D366;
+            padding-bottom: 0.5rem;
+        }
+
+        .section h3 {
+            color: #555;
+            margin: 1.5rem 0 1rem 0;
+            font-size: 1.1rem;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+        }
+
+        .endpoint {
+            background: #e8f5e8;
+            border-left: 4px solid #25D366;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .method {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .method-post {
+            background: #28a745;
+            color: white;
+        }
+
+        .method-get {
+            background: #007bff;
+            color: white;
+        }
+
+        .method-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .endpoint-url {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .param-table th,
+        .param-table td {
+            border: 1px solid #e1e5e9;
+            padding: 0.75rem;
+            text-align: right;
+        }
+
+        .param-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .param-table td {
+            color: #666;
+        }
+
+        .required {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .optional {
+            color: #6c757d;
+        }
+
+        .example-response {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+        }
+
+        .back-btn {
+            background: #95a5a6;
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .back-btn:hover {
+            background: #7f8c8d;
+        }
+
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #856404;
+        }
+
+        .warning {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #721c24;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #155724;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e1e5e9;
+            margin-bottom: 2rem;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            border-bottom-color: #25D366;
+            color: #25D366;
+            font-weight: 600;
+        }
+
+        .tab:hover {
+            background: #f8f9fa;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📚 وثائق API</h1>
+        <p>دليل شامل لاستخدام WhatsApp Dashboard API</p>
+    </div>
+
+    <div class="container">
+        <a href="/dashboard" class="back-btn">← العودة للداش بورد</a>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('overview')">نظرة عامة</div>
+            <div class="tab" onclick="showTab('authentication')">المصادقة</div>
+            <div class="tab" onclick="showTab('endpoints')">النقاط النهائية</div>
+            <div class="tab" onclick="showTab('examples')">أمثلة</div>
+            <div class="tab" onclick="showTab('errors')">رموز الأخطاء</div>
+            <div class="tab" onclick="showTab('new-features')">🆕 الميزات الجديدة</div>
+        </div>
+
+        <!-- نظرة عامة -->
+        <div id="overview" class="tab-content active">
+            <div class="section">
+                <h2>نظرة عامة على API</h2>
+                <p>WhatsApp Dashboard API يتيح لك إرسال الرسائل والملفات عبر WhatsApp باستخدام طلبات HTTP بسيطة.</p>
+                
+                <div class="note">
+                    <strong>ملاحظة:</strong> يجب أن تكون الجلسة متصلة ومفعلة قبل استخدام API.
+                </div>
+
+                <h3>الميزات الرئيسية:</h3>
+                <ul style="margin-right: 2rem; margin-top: 1rem;">
+                    <li>إرسال رسائل نصية</li>
+                    <li>إرسال ملفات متعددة (صور، فيديو، صوت، مستندات)</li>
+                    <li>إرسال رسائل للمجموعات</li>
+                    <li>فحص حالة الجلسة</li>
+                    <li>تسجيل شامل لجميع الطلبات</li>
+                    <li>مصادقة آمنة باستخدام مفاتيح API وتوكنات الجلسات</li>
+                </ul>
+
+                <h3>المتطلبات الأساسية:</h3>
+                <ul style="margin-right: 2rem; margin-top: 1rem;">
+                    <li>مفتاح API صالح</li>
+                    <li>توكن جلسة صالح</li>
+                    <li>جلسة WhatsApp متصلة</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- المصادقة -->
+        <div id="authentication" class="tab-content">
+            <div class="section">
+                <h2>نظام المصادقة</h2>
+                <p>يستخدم API نظام مصادقة مزدوج:</p>
+
+                <h3>1. مفتاح API (API Key)</h3>
+                <p>مفتاح فريد يحدد المستخدم ويجب إرساله في كل طلب.</p>
+                <div class="code-block">
+// الطريقة الجديدة (في الرابط) - موصى بها
+POST /api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message
+
+// في Header
+X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+// أو في Query Parameter
+?api_key=wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                </div>
+
+                <h3>2. توكن الجلسة (Session Token)</h3>
+                <p>مفتاح يحدد جلسة WhatsApp محددة ويجب إرساله في كل طلب.</p>
+                <div class="code-block">
+// في Header
+X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
+
+// أو في Query Parameter
+?session_token=st_xxxxxxxxxxxxxxxxxxxxxxxx
+                </div>
+
+                <div class="warning">
+                    <strong>تحذير:</strong> لا تشارك مفاتيح API أو توكنات الجلسات مع أي شخص. احتفظ بها آمنة.
+                </div>
+            </div>
+        </div>
+
+        <!-- النقاط النهائية -->
+        <div id="endpoints" class="tab-content">
+            <div class="section">
+                <h2>النقاط النهائية المتاحة</h2>
+
+                <h3>إرسال رسالة نصية</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/{apiKey}/send-message</span>
+                </div>
+                <p>إرسال رسالة نصية إلى رقم هاتف محدد.</p>
+                <div class="note" style="background: #e8f5e8; border: 1px solid #4caf50; padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0;">
+                    <strong>🆕 الطريقة الجديدة:</strong> ضع API Key مباشرة في الرابط بدلاً من Header
+                </div>
+
+                <h4>المعاملات المطلوبة:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>to</td>
+                            <td>string</td>
+                            <td>رقم الهاتف (بدون + أو @c.us)</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>message</td>
+                            <td>string</td>
+                            <td>نص الرسالة</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>إرسال ملف</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/send-media</span>
+                </div>
+                <p>إرسال ملف مع رسالة نصية اختيارية.</p>
+
+                <h4>المعاملات المطلوبة:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>to</td>
+                            <td>string</td>
+                            <td>رقم الهاتف</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>media</td>
+                            <td>file</td>
+                            <td>الملف المراد إرساله</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>caption</td>
+                            <td>string</td>
+                            <td>نص الرسالة (اختياري)</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>إرسال رسالة للمجموعة</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/send-group-message</span>
+                </div>
+                <p>إرسال رسالة نصية إلى مجموعة محددة.</p>
+
+                <h4>المعاملات المطلوبة:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>groupId</td>
+                            <td>string</td>
+                            <td>معرف المجموعة</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>message</td>
+                            <td>string</td>
+                            <td>نص الرسالة</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>إرسال رسالة صوتية (PTT)</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/send-voice</span>
+                </div>
+                <p>إرسال رسالة صوتية كـ PTT باستخدام base64.</p>
+
+                <h4>المعاملات المطلوبة:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>to</td>
+                            <td>string</td>
+                            <td>رقم الهاتف</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>audioBase64</td>
+                            <td>string (base64)</td>
+                            <td>ملف الصوت base64</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>mimeType</td>
+                            <td>string</td>
+                            <td>نوع الملف، مثال: audio/ogg</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>فحص حالة الجلسة</h3>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/session-status</span>
+                </div>
+                <p>فحص حالة اتصال جلسة WhatsApp.</p>
+                <div class="note" style="background: #e8f5e8; border: 1px solid #4caf50; padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0;">
+                    <strong>🆕 الطريقة الجديدة:</strong> ضع API Key مباشرة في الرابط
+                </div>
+
+                <h3>🆕 إعادة تشغيل الجلسة</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/{apiKey}/restart-session</span>
+                </div>
+                <p>إعادة تشغيل جلسة WhatsApp محددة إذا انفصلت أو توقفت عن العمل.</p>
+
+                <h3>🆕 Debug الجلسات</h3>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/debug-sessions</span>
+                </div>
+                <p>الحصول على معلومات مفصلة عن جميع الجلسات والتوكنات للمستخدم.</p>
+
+                <h3>🆕 صندوق الوارد (الرسائل)</h3>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/messages?chatId=xxx@c.us&limit=50&fromMe=false</span>
+                </div>
+                <p>جلب آخر الرسائل المخزنة للجلسة. يمكن التصفية حسب محادثة معينة، وعدد النتائج، وهل هي مرسلة منك أم لا.</p>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>chatId</td>
+                            <td>string</td>
+                            <td>معرف المحادثة (اختياري)</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                        <tr>
+                            <td>limit</td>
+                            <td>number</td>
+                            <td>عدد النتائج (افتراضي 50، حد أقصى 200)</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                        <tr>
+                            <td>fromMe</td>
+                            <td>boolean</td>
+                            <td>true لرسائل صادرة، false لرسائل واردة</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/messages/{messageId}</span>
+                </div>
+                <p>جلب رسالة واحدة بالتفاصيل (يتضمن معلومات الميديا base64 إن وجدت).</p>
+            </div>
+        </div>
+
+        <!-- الأمثلة -->
+        <div id="examples" class="tab-content">
+            <div class="section">
+                <h2>أمثلة الاستخدام</h2>
+
+                <h3>مثال: إرسال رسالة نصية (الطريقة الجديدة)</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "966501234567",
+    "message": "مرحباً! هذه رسالة تجريبية من API"
+  }'
+                </div>
+
+                <h3>مثال: إرسال رسالة نصية (الطريقة القديمة)</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/send-message" \
+  -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "966501234567",
+    "message": "مرحباً! هذه رسالة تجريبية من API"
+  }'
+                </div>
+
+                <h3>مثال: إرسال ملف</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/send-media" \
+  -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -F "to=966501234567" \
+  -F "media=@/path/to/image.jpg" \
+  -F "caption=صورة جميلة!"
+                </div>
+
+                <h3>مثال: إرسال رسالة للمجموعة</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/send-group-message" \
+  -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "groupId": "123456789",
+    "message": "مرحباً بالجميع! 👋"
+  }'
+                </div>
+
+                <h3>مثال: فحص حالة الجلسة (الطريقة الجديدة)</h3>
+                <div class="code-block">
+curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/session-status" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
+                </div>
+
+                <h3>🆕 مثال: إرسال رسالة صوتية</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-voice" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "966501234567",
+    "audioBase64": "<BASE64>",
+    "mimeType": "audio/ogg"
+  }'
+                </div>
+
+                <h3>🆕 مثال: جلب الرسائل</h3>
+                <div class="code-block">
+curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages?limit=20" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
+                </div>
+
+                <h3>🆕 مثال: جلب رسالة واحدة</h3>
+                <div class="code-block">
+curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages/3EB0C76..." \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
+                </div>
+
+                <h3>🆕 مثال: إعادة تشغيل الجلسة</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json"
+                </div>
+
+                <h3>🆕 مثال: Debug الجلسات</h3>
+                <div class="code-block">
+curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/debug-sessions"
+                </div>
+
+                <h3>مثال باستخدام JavaScript (الطريقة الجديدة)</h3>
+                <div class="code-block">
+const response = await fetch('http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message', {
+  method: 'POST',
+  headers: {
+    'X-Session-Token': 'st_xxxxxxxxxxxxxxxxxxxxxxxx',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    to: '966501234567',
+    message: 'مرحباً من JavaScript!'
+  })
+});
+
+const result = await response.json();
+console.log(result);
+                </div>
+            </div>
+        </div>
+
+        <!-- رموز الأخطاء -->
+        <div id="errors" class="tab-content">
+            <div class="section">
+                <h2>رموز الأخطاء</h2>
+
+                <h3>أخطاء المصادقة (401)</h3>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>رمز الخطأ</th>
+                            <th>الوصف</th>
+                            <th>الحل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>MISSING_API_KEY</td>
+                            <td>مفتاح API مفقود</td>
+                            <td>أضف X-API-Key في Header</td>
+                        </tr>
+                        <tr>
+                            <td>INVALID_API_KEY</td>
+                            <td>مفتاح API غير صحيح</td>
+                            <td>تحقق من صحة المفتاح</td>
+                        </tr>
+                        <tr>
+                            <td>MISSING_SESSION_TOKEN</td>
+                            <td>توكن الجلسة مفقود</td>
+                            <td>أضف X-Session-Token في Header</td>
+                        </tr>
+                        <tr>
+                            <td>INVALID_SESSION_TOKEN</td>
+                            <td>توكن الجلسة غير صحيح</td>
+                            <td>تحقق من صحة التوكن</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>أخطاء المعاملات (400)</h3>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>رمز الخطأ</th>
+                            <th>الوصف</th>
+                            <th>الحل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>MISSING_PARAMETERS</td>
+                            <td>معاملات مفقودة</td>
+                            <td>أضف جميع المعاملات المطلوبة</td>
+                        </tr>
+                        <tr>
+                            <td>FILE_TOO_LARGE</td>
+                            <td>الملف كبير جداً</td>
+                            <td>استخدم ملف أصغر من 16MB</td>
+                        </tr>
+                        <tr>
+                            <td>UNSUPPORTED_FILE_TYPE</td>
+                            <td>نوع ملف غير مدعوم</td>
+                            <td>استخدم أنواع الملفات المدعومة</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>أخطاء الجلسة (404)</h3>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>رمز الخطأ</th>
+                            <th>الوصف</th>
+                            <th>الحل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>SESSION_NOT_FOUND</td>
+                            <td>الجلسة غير موجودة</td>
+                            <td>تحقق من معرف الجلسة</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>أخطاء الخادم (500)</h3>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>رمز الخطأ</th>
+                            <th>الوصف</th>
+                            <th>الحل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>SEND_MESSAGE_FAILED</td>
+                            <td>فشل في إرسال الرسالة</td>
+                            <td>تحقق من اتصال الجلسة</td>
+                        </tr>
+                        <tr>
+                            <td>SEND_MEDIA_FAILED</td>
+                            <td>فشل في إرسال الملف</td>
+                            <td>تحقق من صحة الملف</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- الميزات الجديدة -->
+        <div id="new-features" class="tab-content">
+            <div class="section">
+                <h2>🆕 الميزات الجديدة</h2>
+                
+                <h3>1. API Key في الرابط</h3>
+                <p>الآن يمكنك وضع API Key مباشرة في الرابط بدلاً من Header، مما يجعل الاستخدام أسهل مع Postman وأدوات أخرى.</p>
+                
+                <div class="code-block">
+// الطريقة الجديدة (أسهل)
+POST /api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message
+
+// الطريقة القديمة
+POST /api/send-message
+Headers: X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                </div>
+
+                <h3>2. إعادة تشغيل الجلسة</h3>
+                <p>يمكنك إعادة تشغيل جلسة محددة عبر API إذا انفصلت أو توقفت عن العمل.</p>
+                
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/{apiKey}/restart-session</span>
+                </div>
+                
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json"
+                </div>
+
+                <h3>3. إعادة تشغيل تلقائي للجلسات</h3>
+                <p>عند بدء الخادم، يتم إعادة تشغيل جميع الجلسات المتصلة تلقائياً، مما يضمن عمل API فوراً.</p>
+
+                <h3>4. صفحة اختبار API مدمجة</h3>
+                <p>صفحة اختبار API مدمجة في الموقع تتيح لك اختبار جميع الوظائف بسهولة.</p>
+                
+                <div class="note" style="background: #e3f2fd; border: 1px solid #2196f3; padding: 1rem; border-radius: 8px;">
+                    <strong>🚀 كيفية الوصول لصفحة الاختبار:</strong><br>
+                    1. اذهب للداش بورد<br>
+                    2. اضغط على "🧪 اختبار API"<br>
+                    3. اختبر جميع الوظائف مباشرة
+                </div>
+
+                <h3>5. مسار Debug للجلسات</h3>
+                <p>مسار جديد لمعرفة حالة جميع الجلسات والتوكنات.</p>
+                
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/debug-sessions</span>
+                </div>
+
+                <h3>6. تحسينات في الأمان</h3>
+                <ul style="margin-right: 2rem; margin-top: 1rem;">
+                    <li>تحسين نظام المصادقة</li>
+                    <li>تسجيل أفضل للأخطاء</li>
+                    <li>حماية إضافية ضد الطلبات غير المصرح بها</li>
+                </ul>
+
+                <div class="warning" style="background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                    <strong>💡 نصيحة:</strong> استخدم الطريقة الجديدة (API Key في الرابط) فهي أسهل وأكثر وضوحاً!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // إظهار التبويب المحدد
+        function showTab(tabName) {
+            // إخفاء جميع المحتويات
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // إزالة التفعيل من جميع التبويبات
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // إظهار المحتوى المحدد
+            document.getElementById(tabName).classList.add('active');
+            
+            // تفعيل التبويب المحدد
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار API - WhatsApp Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+
+        .test-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.loading {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .api-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .api-info h3 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+
+        .api-key-display, .session-token-display {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 اختبار API</h1>
+            <p>اختبر API الخاص بك بسهولة</p>
+        </div>
+
+        <div class="content">
+            <button class="back-btn" onclick="window.location.href='/dashboard'">← العودة للداش بورد</button>
+
+            <div class="api-info">
+                <h3>🔑 معلومات API</h3>
+                <div>
+                    <strong>API Key:</strong>
+                    <div class="api-key-display" id="apiKeyDisplay">جاري التحميل...</div>
+                    <button class="copy-btn" onclick="copyToClipboard('apiKeyDisplay')">نسخ</button>
+                </div>
+                <div>
+                    <strong>Session:</strong>
+                    <select id="sessionSelect" style="margin: 10px 0; padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
+                        <option value="">جاري التحميل...</option>
+                    </select>
+                </div>
+                <div>
+                    <strong>Session Token:</strong>
+                    <div class="session-token-display" id="sessionTokenDisplay">جاري التحميل...</div>
+                    <button class="copy-btn" onclick="copyToClipboard('sessionTokenDisplay')">نسخ</button>
+                </div>
+            </div>
+
+            <!-- اختبار الاتصال -->
+            <div class="test-section">
+                <h3>🔗 اختبار الاتصال</h3>
+                <button class="btn" onclick="testConnection()">اختبار الاتصال</button>
+                <div id="connectionResult" class="result"></div>
+            </div>
+
+                         <!-- اختبار API Key -->
+             <div class="test-section">
+                 <h3>🔑 اختبار API Key</h3>
+                 <button class="btn" onclick="testApiKey()">اختبار API Key</button>
+                 <div id="apiKeyResult" class="result"></div>
+             </div>
+
+             <!-- Debug الجلسات -->
+             <div class="test-section">
+                 <h3>🐛 Debug الجلسات</h3>
+                 <button class="btn" onclick="debugSessions()">عرض معلومات الجلسات</button>
+                 <div id="debugSessionsResult" class="result"></div>
+             </div>
+
+             <!-- إعادة تشغيل الجلسة -->
+             <div class="test-section">
+                 <h3>🔄 إعادة تشغيل الجلسة</h3>
+                 <button class="btn" onclick="restartSession()">إعادة تشغيل الجلسة</button>
+                 <div id="restartSessionResult" class="result"></div>
+             </div>
+
+            <!-- اختبار حالة الجلسة -->
+            <div class="test-section">
+                <h3>📱 اختبار حالة الجلسة</h3>
+                <button class="btn" onclick="testSessionStatus()">اختبار حالة الجلسة</button>
+                <div id="sessionStatusResult" class="result"></div>
+            </div>
+
+            <!-- اختبار إرسال رسالة -->
+            <div class="test-section">
+                <h3>💬 اختبار إرسال رسالة</h3>
+                <div class="form-group">
+                    <label>رقم الهاتف:</label>
+                    <input type="text" id="phoneNumber" placeholder="966501234567" value="966501234567">
+                </div>
+                <div class="form-group">
+                    <label>الرسالة:</label>
+                    <textarea id="messageText" rows="3" placeholder="اكتب رسالتك هنا...">مرحباً! هذا اختبار من الموقع 🚀</textarea>
+                </div>
+                <button class="btn" onclick="testSendMessage()">إرسال الرسالة</button>
+                <div id="sendMessageResult" class="result"></div>
+            </div>
+
+            <!-- اختبار إرسال ملف -->
+            <div class="test-section">
+                <h3>📎 اختبار إرسال ملف</h3>
+                <div class="form-group">
+                    <label>رقم الهاتف:</label>
+                    <input type="text" id="mediaPhoneNumber" placeholder="966501234567" value="966501234567">
+                </div>
+                <div class="form-group">
+                    <label>الملف:</label>
+                    <input type="file" id="mediaFile" accept="image/*,video/*,audio/*,application/pdf">
+                </div>
+                <div class="form-group">
+                    <label>رسالة توضيحية (اختياري):</label>
+                    <input type="text" id="mediaCaption" placeholder="رسالة توضيحية للملف">
+                </div>
+                <button class="btn" onclick="testSendMedia()">إرسال الملف</button>
+                <div id="sendMediaResult" class="result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let apiKey = '';
+        let sessionToken = '';
+        let sessionOptions = [];
+
+        // تحميل معلومات API
+        async function loadApiInfo() {
+            try {
+                const response = await fetch('/api/user-api-info');
+                const data = await response.json();
+                
+                if (data.success) {
+                    apiKey = data.apiKey;
+                    sessionOptions = data.sessionTokens || [];
+
+                    // تعبئة قائمة الجلسات
+                    const select = document.getElementById('sessionSelect');
+                    select.innerHTML = '';
+                    if (sessionOptions.length === 0) {
+                        select.innerHTML = '<option value="">لا توجد جلسات</option>';
+                    } else {
+                        sessionOptions.forEach((s, idx) => {
+                            const opt = document.createElement('option');
+                            opt.value = s.token;
+                            opt.textContent = `${s.sessionName} (#${s.sessionId}) - ${s.status}`;
+                            // اختر أول جلسة متصلة إن وجدت وإلا الأولى
+                            if (!select.value && (s.status === 'connected' || idx === 0)) {
+                                select.value = s.token;
+                            }
+                            select.appendChild(opt);
+                        });
+                    }
+
+                    sessionToken = select.value || '';
+
+                    document.getElementById('apiKeyDisplay').textContent = apiKey;
+                    document.getElementById('sessionTokenDisplay').textContent = sessionToken || 'لا يوجد توكن';
+
+                    // تغيير التوكن عند اختيار جلسة مختلفة
+                    select.onchange = function() {
+                        sessionToken = this.value;
+                        document.getElementById('sessionTokenDisplay').textContent = sessionToken || 'لا يوجد توكن';
+                    };
+                } else {
+                    document.getElementById('apiKeyDisplay').textContent = 'فشل في تحميل API Key';
+                    document.getElementById('sessionTokenDisplay').textContent = 'فشل في تحميل Session Token';
+                }
+            } catch (error) {
+                console.error('Error loading API info:', error);
+                document.getElementById('apiKeyDisplay').textContent = 'خطأ في التحميل';
+                document.getElementById('sessionTokenDisplay').textContent = 'خطأ في التحميل';
+            }
+        }
+
+        // نسخ إلى الحافظة
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert('تم النسخ بنجاح!');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('تم النسخ بنجاح!');
+            });
+        }
+
+        // اختبار الاتصال
+        async function testConnection() {
+            const resultDiv = document.getElementById('connectionResult');
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = 'جاري الاختبار...';
+
+            try {
+                const response = await fetch('/api/test');
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `خطأ: ${error.message}`;
+            }
+        }
+
+                 // اختبار API Key
+         async function testApiKey() {
+             if (!apiKey) {
+                 alert('يرجى تحميل معلومات API أولاً');
+                 return;
+             }
+
+             const resultDiv = document.getElementById('apiKeyResult');
+             resultDiv.className = 'result loading';
+             resultDiv.textContent = 'جاري الاختبار...';
+
+             try {
+                 const response = await fetch(`/api/${apiKey}/test`);
+                 const data = await response.json();
+                 
+                 resultDiv.className = 'result success';
+                 resultDiv.textContent = JSON.stringify(data, null, 2);
+             } catch (error) {
+                 resultDiv.className = 'result error';
+                 resultDiv.textContent = `خطأ: ${error.message}`;
+             }
+         }
+
+         // Debug الجلسات
+         async function debugSessions() {
+             if (!apiKey) {
+                 alert('يرجى تحميل معلومات API أولاً');
+                 return;
+             }
+
+             const resultDiv = document.getElementById('debugSessionsResult');
+             resultDiv.className = 'result loading';
+             resultDiv.textContent = 'جاري التحميل...';
+
+             try {
+                 const response = await fetch(`/api/${apiKey}/debug-sessions`);
+                 const data = await response.json();
+                 
+                 resultDiv.className = 'result success';
+                 resultDiv.textContent = JSON.stringify(data, null, 2);
+             } catch (error) {
+                 resultDiv.className = 'result error';
+                 resultDiv.textContent = `خطأ: ${error.message}`;
+             }
+         }
+
+         // إعادة تشغيل الجلسة
+         async function restartSession() {
+             if (!apiKey || !sessionToken) {
+                 alert('يرجى تحميل معلومات API أولاً');
+                 return;
+             }
+
+             const resultDiv = document.getElementById('restartSessionResult');
+             resultDiv.className = 'result loading';
+             resultDiv.textContent = 'جاري إعادة التشغيل...';
+
+             try {
+                 const response = await fetch(`/api/${apiKey}/restart-session`, {
+                     method: 'POST',
+                     headers: {
+                         'X-Session-Token': sessionToken,
+                         'Content-Type': 'application/json'
+                     }
+                 });
+                 const data = await response.json();
+                 
+                 resultDiv.className = 'result success';
+                 resultDiv.textContent = JSON.stringify(data, null, 2);
+             } catch (error) {
+                 resultDiv.className = 'result error';
+                 resultDiv.textContent = `خطأ: ${error.message}`;
+             }
+         }
+
+        // اختبار حالة الجلسة
+        async function testSessionStatus() {
+            if (!apiKey || !sessionToken) {
+                alert('يرجى تحميل معلومات API أولاً');
+                return;
+            }
+
+            const resultDiv = document.getElementById('sessionStatusResult');
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = 'جاري الاختبار...';
+
+            try {
+                const response = await fetch(`/api/${apiKey}/session-status`, {
+                    headers: {
+                        'X-Session-Token': sessionToken
+                    }
+                });
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `خطأ: ${error.message}`;
+            }
+        }
+
+        // اختبار إرسال رسالة
+        async function testSendMessage() {
+            if (!apiKey || !sessionToken) {
+                alert('يرجى تحميل معلومات API أولاً');
+                return;
+            }
+
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const message = document.getElementById('messageText').value;
+
+            if (!phoneNumber || !message) {
+                alert('يرجى ملء جميع الحقول');
+                return;
+            }
+
+            const resultDiv = document.getElementById('sendMessageResult');
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = 'جاري الإرسال...';
+
+            try {
+                const response = await fetch(`/api/${apiKey}/send-message`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-Token': sessionToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to: phoneNumber,
+                        message: message
+                    })
+                });
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `خطأ: ${error.message}`;
+            }
+        }
+
+        // اختبار إرسال ملف
+        async function testSendMedia() {
+            if (!apiKey || !sessionToken) {
+                alert('يرجى تحميل معلومات API أولاً');
+                return;
+            }
+
+            const phoneNumber = document.getElementById('mediaPhoneNumber').value;
+            const file = document.getElementById('mediaFile').files[0];
+            const caption = document.getElementById('mediaCaption').value;
+
+            if (!phoneNumber || !file) {
+                alert('يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            const resultDiv = document.getElementById('sendMediaResult');
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = 'جاري الإرسال...';
+
+            try {
+                const formData = new FormData();
+                formData.append('to', phoneNumber);
+                formData.append('media', file);
+                if (caption) {
+                    formData.append('caption', caption);
+                }
+
+                const response = await fetch(`/api/${apiKey}/send-media`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-Token': sessionToken
+                    },
+                    body: formData
+                });
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `خطأ: ${error.message}`;
+            }
+        }
+
+        // تحميل المعلومات عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', loadApiInfo);
+    </script>
+</body>
+</html>

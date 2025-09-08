@@ -1,0 +1,24 @@
+2025/09/03-15:09:16.331 7dc Creating DB E:\e\whatsapp-web.js-main\whatsapp-dashboard-app\sessions\session-session_5\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
+2025/09/03-15:09:16.350 7dc Reusing MANIFEST E:\e\whatsapp-web.js-main\whatsapp-dashboard-app\sessions\session-session_5\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/09/03-15:09:25.057 7dc Manual compaction at level-0 from '\x00\x03\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x04\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.060 7dc Manual compaction at level-0 from '\x00\x04\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x05\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.063 7dc Manual compaction at level-0 from '\x00\x05\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x06\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.066 2318 Manual compaction at level-0 from '\x00\x06\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x07\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.073 2034 Manual compaction at level-0 from '\x00\x07\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x08\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.077 2034 Manual compaction at level-0 from '\x00\x08\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x09\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.079 2034 Manual compaction at level-0 from '\x00\x09\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0a\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.081 2034 Manual compaction at level-0 from '\x00\x0d\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0e\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.083 2034 Manual compaction at level-0 from '\x00\x0b\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0c\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.086 2034 Manual compaction at level-0 from '\x00\x0c\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0d\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.089 7dc Level-0 table #5: started
+2025/09/03-15:09:25.096 7dc Level-0 table #5: 19607 bytes OK
+2025/09/03-15:09:25.099 7dc Delete type=0 #3
+2025/09/03-15:09:25.099 7dc Manual compaction at level-0 from '\x00\x0a\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0b\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:25.201 1bbc Level-0 table #7: started
+2025/09/03-15:09:25.206 1bbc Level-0 table #7: 5995 bytes OK
+2025/09/03-15:09:25.209 1bbc Delete type=0 #4
+2025/09/03-15:09:25.209 1bbc Manual compaction at level-0 from '\x00\x11\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x12\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/09/03-15:09:29.978 7dc Compacting 1@1 + 1@2 files
+2025/09/03-15:09:29.986 7dc Generated table #8@1: 401 keys, 10548 bytes
+2025/09/03-15:09:29.986 7dc Compacted 1@1 + 1@2 files => 10548 bytes
+2025/09/03-15:09:29.988 7dc compacted to: files[ 0 0 1 0 0 0 0 ]

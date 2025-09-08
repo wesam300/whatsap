@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الأدمن - WhatsApp API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="css/unified-design.css" rel="stylesheet">
+    <style>
+        .admin-card {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-md);
+            transition: var(--transition-normal);
+            border: 1px solid var(--border-color);
+        }
+
+        .admin-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .stat-item {
+            background: var(--bg-primary);
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius-md);
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-number {
+            font-size: var(--font-size-2xl);
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .stat-label {
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+        }
+
+        .user-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .user-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-inactive {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .status-admin {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--primary-color);
+        }
+
+        .action-btn {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-size: 12px;
+            cursor: pointer;
+            transition: var(--transition-normal);
+            margin-left: var(--spacing-xs);
+        }
+
+        .btn-edit {
+            background: var(--primary-color);
+            color: var(--text-light);
+        }
+
+        .btn-edit:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-delete {
+            background: var(--danger-color);
+            color: var(--text-light);
+        }
+
+        .btn-delete:hover {
+            background: #dc2626;
+        }
+
+        .btn-toggle {
+            background: var(--warning-color);
+            color: var(--text-light);
+        }
+
+        .btn-toggle:hover {
+            background: #d97706;
+        }
+
+        .package-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .package-price {
+            font-size: var(--font-size-xl);
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: var(--spacing-md) 0;
+        }
+
+        .feature-list li {
+            padding: var(--spacing-xs) 0;
+            color: var(--text-primary);
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            color: var(--success-color);
+            font-weight: bold;
+            margin-left: var(--spacing-sm);
+        }
+
+        .modal-header {
+            background: var(--primary-color);
+            color: var(--text-light);
+        }
+
+        .form-floating {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .form-floating > .form-control {
+            padding: var(--spacing-md);
+        }
+
+        .form-floating > label {
+            padding: var(--spacing-md);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cog me-2"></i>
+                لوحة الأدمن
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="dashboard.html">
+                    <i class="fas fa-tachometer-alt me-1"></i>
+                    لوحة التحكم
+                </a>
+                <a class="nav-link" href="api-management.html">
+                    <i class="fas fa-code me-1"></i>
+                    إدارة API
+                </a>
+                <a class="nav-link" href="#" onclick="logout()">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    تسجيل الخروج
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2><i class="fas fa-cog me-2"></i>لوحة الأدمن</h2>
+                <p class="text-muted">إدارة المستخدمين والباقات والنظام</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-primary" onclick="showAddUserModal()">
+                    <i class="fas fa-user-plus me-1"></i>
+                    إضافة مستخدم
+                </button>
+                <button class="btn btn-success" onclick="showAddPackageModal()">
+                    <i class="fas fa-plus me-1"></i>
+                    إضافة باقة
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number" id="totalUsers">0</div>
+                <div class="stat-label">إجمالي المستخدمين</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="activeUsers">0</div>
+                <div class="stat-label">المستخدمين النشطين</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="totalSessions">0</div>
+                <div class="stat-label">إجمالي الجلسات</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="totalSubscriptions">0</div>
+                <div class="stat-label">إجمالي الاشتراكات</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
+                    <i class="fas fa-users me-2"></i>
+                    المستخدمين
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="packages-tab" data-bs-toggle="tab" data-bs-target="#packages" type="button" role="tab">
+                    <i class="fas fa-boxes me-2"></i>
+                    الباقات
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="subscriptions-tab" data-bs-toggle="tab" data-bs-target="#subscriptions" type="button" role="tab">
+                    <i class="fas fa-credit-card me-2"></i>
+                    الاشتراكات
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="adminTabContent">
+            <!-- Users Tab -->
+            <div class="tab-pane fade show active" id="users" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users me-2"></i>
+                            إدارة المستخدمين
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="usersList">
+                            <!-- Users will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Packages Tab -->
+            <div class="tab-pane fade" id="packages" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-boxes me-2"></i>
+                            إدارة الباقات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="packagesList">
+                            <!-- Packages will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscriptions Tab -->
+            <div class="tab-pane fade" id="subscriptions" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-credit-card me-2"></i>
+                            إدارة الاشتراكات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="subscriptionsList">
+                            <!-- Subscriptions will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-plus me-2"></i>
+                        إضافة مستخدم جديد
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addUserForm">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="newUsername" placeholder="اسم المستخدم" required>
+                            <label for="newUsername">اسم المستخدم</label>
+                        </div>
+                        <div class="form-floating">
+                            <input type="email" class="form-control" id="newEmail" placeholder="البريد الإلكتروني" required>
+                            <label for="newEmail">البريد الإلكتروني</label>
+                        </div>
+                        <div class="form-floating">
+                            <input type="password" class="form-control" id="newPassword" placeholder="كلمة المرور" required>
+                            <label for="newPassword">كلمة المرور</label>
+                        </div>
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="newMaxSessions" placeholder="الحد الأقصى للجلسات" value="1" required>
+                            <label for="newMaxSessions">الحد الأقصى للجلسات</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="newIsAdmin">
+                            <label class="form-check-label" for="newIsAdmin">
+                                أدمن
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="addUser()">
+                        <i class="fas fa-plus me-2"></i>
+                        إضافة المستخدم
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Package Modal -->
+    <div class="modal fade" id="addPackageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2"></i>
+                        إضافة باقة جديدة
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPackageForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="packageId" placeholder="معرف الباقة" required>
+                                    <label for="packageId">معرف الباقة</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="packageName" placeholder="اسم الباقة" required>
+                                    <label for="packageName">اسم الباقة</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="packagePrice" placeholder="السعر" step="0.01" required>
+                                    <label for="packagePrice">السعر (USD)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="packageDuration" placeholder="المدة بالأيام" required>
+                                    <label for="packageDuration">المدة بالأيام</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="packageMaxSessions" placeholder="الحد الأقصى للجلسات" required>
+                            <label for="packageMaxSessions">الحد الأقصى للجلسات</label>
+                        </div>
+                        <div class="form-floating">
+                            <textarea class="form-control" id="packageFeatures" placeholder="المميزات (سطر واحد لكل ميزة)" style="height: 100px"></textarea>
+                            <label for="packageFeatures">المميزات (سطر واحد لكل ميزة)</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="addPackage()">
+                        <i class="fas fa-plus me-2"></i>
+                        إضافة الباقة
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentUser = null;
+        let users = [];
+        let packages = [];
+        let subscriptions = [];
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadStats();
+            loadUsers();
+            loadPackages();
+            loadSubscriptions();
+        });
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/me');
+                const data = await response.json();
+                if (data.success) {
+                    currentUser = data.user;
+                    if (!currentUser.isAdmin) {
+                        window.location.href = '/dashboard';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                window.location.href = '/dashboard';
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const data = await response.json();
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
+                    document.getElementById('activeUsers').textContent = stats.activeUsers || 0;
+                    document.getElementById('totalSessions').textContent = stats.totalSessions || 0;
+                    document.getElementById('totalSubscriptions').textContent = stats.totalSubscriptions || 0;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                const data = await response.json();
+                if (data.success) {
+                    users = data.users;
+                    displayUsers();
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function displayUsers() {
+            const container = document.getElementById('usersList');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted">لا توجد مستخدمين</p>';
+                return;
+            }
+
+            let html = '';
+            users.forEach(user => {
+                const statusClass = user.is_admin ? 'status-admin' : 
+                                  user.is_active ? 'status-active' : 'status-inactive';
+                const statusText = user.is_admin ? 'أدمن' : 
+                                 user.is_active ? 'نشط' : 'موقوف';
+
+                html += `
+                    <div class="user-card">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1">${user.username}</h6>
+                                <p class="text-muted mb-2">${user.email}</p>
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="user-status ${statusClass}">${statusText}</span>
+                                    <small class="text-muted">
+                                        <i class="fas fa-users me-1"></i>
+                                        ${user.max_sessions} جلسة
+                                    </small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        ${user.session_ttl_days || 30} يوم
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="btn-group" role="group">
+                                    <button class="action-btn btn-edit" onclick="editUser(${user.id})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn btn-toggle" onclick="toggleUserStatus(${user.id})">
+                                        <i class="fas fa-${user.is_active ? 'ban' : 'check'}"></i>
+                                    </button>
+                                    <button class="action-btn btn-delete" onclick="deleteUser(${user.id})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadPackages() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                if (data.success && data.packages) {
+                    packages = data.packages;
+                    displayPackages();
+                }
+            } catch (error) {
+                console.error('Error loading packages:', error);
+            }
+        }
+
+        function displayPackages() {
+            const container = document.getElementById('packagesList');
+            
+            if (packages.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted">لا توجد باقات</p>';
+                return;
+            }
+
+            let html = '';
+            packages.forEach(pkg => {
+                html += `
+                    <div class="package-card">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1">${pkg.name}</h6>
+                                <div class="package-price">$${pkg.price} USD</div>
+                                <ul class="feature-list">
+                                    ${pkg.features.map(feature => `<li>${feature}</li>`).join('')}
+                                </ul>
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>
+                                    ${pkg.durationDays} يوم
+                                </small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="btn-group" role="group">
+                                    <button class="action-btn btn-edit" onclick="editPackage('${pkg.id}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn btn-delete" onclick="deletePackage('${pkg.id}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadSubscriptions() {
+            try {
+                const response = await fetch('/api/admin/subscriptions');
+                const data = await response.json();
+                if (data.success) {
+                    subscriptions = data.subscriptions;
+                    displaySubscriptions();
+                }
+            } catch (error) {
+                console.error('Error loading subscriptions:', error);
+            }
+        }
+
+        function displaySubscriptions() {
+            const container = document.getElementById('subscriptionsList');
+            
+            if (subscriptions.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted">لا توجد اشتراكات</p>';
+                return;
+            }
+
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>المستخدم</th>
+                                <th>الباقة</th>
+                                <th>السعر</th>
+                                <th>تاريخ البداية</th>
+                                <th>تاريخ الانتهاء</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            subscriptions.forEach(sub => {
+                const startDate = new Date(sub.startDate).toLocaleDateString('ar-SA');
+                const endDate = new Date(sub.endDate).toLocaleDateString('ar-SA');
+                const statusClass = sub.status === 'active' ? 'badge bg-success' : 'badge bg-danger';
+                const statusText = sub.status === 'active' ? 'نشط' : 'منتهي';
+
+                html += `
+                    <tr>
+                        <td>${sub.username}</td>
+                        <td>${sub.packageName}</td>
+                        <td>$${sub.price} ${sub.currency}</td>
+                        <td>${startDate}</td>
+                        <td>${endDate}</td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="cancelSubscription(${sub.id})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function showAddUserModal() {
+            const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+            modal.show();
+        }
+
+        function showAddPackageModal() {
+            const modal = new bootstrap.Modal(document.getElementById('addPackageModal'));
+            modal.show();
+        }
+
+        async function addUser() {
+            const username = document.getElementById('newUsername').value.trim();
+            const email = document.getElementById('newEmail').value.trim();
+            const password = document.getElementById('newPassword').value;
+            const maxSessions = parseInt(document.getElementById('newMaxSessions').value);
+            const isAdmin = document.getElementById('newIsAdmin').checked;
+
+            if (!username || !email || !password) {
+                showErrorMessage('يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        maxSessions,
+                        isAdmin
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+                    showSuccessMessage('تم إضافة المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error adding user:', error);
+                showErrorMessage('فشل في إضافة المستخدم');
+            }
+        }
+
+        async function addPackage() {
+            const id = document.getElementById('packageId').value.trim();
+            const name = document.getElementById('packageName').value.trim();
+            const price = parseFloat(document.getElementById('packagePrice').value);
+            const durationDays = parseInt(document.getElementById('packageDuration').value);
+            const maxSessions = parseInt(document.getElementById('packageMaxSessions').value);
+            const features = document.getElementById('packageFeatures').value.split('\n').filter(f => f.trim());
+
+            if (!id || !name || !price || !durationDays || !maxSessions) {
+                showErrorMessage('يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/packages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id,
+                        name,
+                        price,
+                        durationDays,
+                        maxSessions,
+                        features
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('addPackageModal')).hide();
+                    showSuccessMessage('تم إضافة الباقة بنجاح');
+                    loadPackages();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error adding package:', error);
+                showErrorMessage('فشل في إضافة الباقة');
+            }
+        }
+
+        async function toggleUserStatus(userId) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/toggle`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessMessage('تم تحديث حالة المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error toggling user status:', error);
+                showErrorMessage('فشل في تحديث حالة المستخدم');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessMessage('تم حذف المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showErrorMessage('فشل في حذف المستخدم');
+            }
+        }
+
+        function editUser(userId) {
+            // Implement edit user functionality
+            showInfoMessage('ميزة تعديل المستخدم قيد التطوير');
+        }
+
+        function editPackage(packageId) {
+            // Implement edit package functionality
+            showInfoMessage('ميزة تعديل الباقة قيد التطوير');
+        }
+
+        async function deletePackage(packageId) {
+            if (!confirm('هل أنت متأكد من حذف هذه الباقة؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/packages/${packageId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessMessage('تم حذف الباقة بنجاح');
+                    loadPackages();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error deleting package:', error);
+                showErrorMessage('فشل في حذف الباقة');
+            }
+        }
+
+        async function cancelSubscription(subscriptionId) {
+            if (!confirm('هل أنت متأكد من إلغاء هذا الاشتراك؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/subscriptions/${subscriptionId}/cancel`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessMessage('تم إلغاء الاشتراك بنجاح');
+                    loadSubscriptions();
+                    loadStats();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error canceling subscription:', error);
+                showErrorMessage('فشل في إلغاء الاشتراك');
+            }
+        }
+
+        function showSuccessMessage(message) {
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function showErrorMessage(message) {
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function showInfoMessage(message) {
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.innerHTML = `
+                <i class="fas fa-info-circle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function logout() {
+            fetch('/logout')
+                .then(() => {
+                    window.location.href = '/';
+                })
+                .catch(error => {
+                    console.error('Logout error:', error);
+                    window.location.href = '/';
+                });
+        }
+    </script>
+</body>
+</html>
+
