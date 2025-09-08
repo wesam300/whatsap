@@ -3,305 +3,655 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة الأدمن - WhatsApp API</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="css/unified-design.css" rel="stylesheet">
+    <title>لوحة الأدمن - WhatsApp Dashboard</title>
     <style>
-        .admin-card {
-            background: var(--bg-primary);
-            border-radius: var(--border-radius-lg);
-            box-shadow: var(--shadow-md);
-            transition: var(--transition-normal);
-            border: 1px solid var(--border-color);
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        .admin-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: #25D366;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar h1 {
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .navbar h1::before {
+            content: "⚙️";
+            font-size: 28px;
+        }
+
+        .navbar .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .header-section h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: var(--spacing-md);
-            margin-bottom: var(--spacing-xl);
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
         }
 
-        .stat-item {
-            background: var(--bg-primary);
-            padding: var(--spacing-lg);
-            border-radius: var(--border-radius-md);
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
             text-align: center;
-            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
         }
 
         .stat-number {
-            font-size: var(--font-size-2xl);
-            font-weight: 700;
-            color: var(--primary-color);
-            margin-bottom: var(--spacing-xs);
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #25D366;
+            margin-bottom: 10px;
         }
 
         .stat-label {
-            font-size: var(--font-size-sm);
-            color: var(--text-secondary);
+            color: #666;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 5px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .tab-button.active {
+            background: #25D366;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
         }
 
         .user-card {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-md);
-            padding: var(--spacing-lg);
-            margin-bottom: var(--spacing-md);
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .user-card:hover {
+            border-color: #25D366;
+            box-shadow: 0 3px 10px rgba(37, 211, 102, 0.1);
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .user-info h6 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .user-info p {
+            color: #666;
+            margin: 0;
         }
 
         .user-status {
             display: inline-block;
-            padding: 4px 12px;
+            padding: 6px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
         }
 
         .status-active {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success-color);
+            background: #d4edda;
+            color: #155724;
         }
 
         .status-inactive {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger-color);
+            background: #f8d7da;
+            color: #721c24;
         }
 
         .status-admin {
-            background: rgba(59, 130, 246, 0.1);
-            color: var(--primary-color);
+            background: #cce5ff;
+            color: #004085;
         }
 
-        .action-btn {
-            padding: var(--spacing-xs) var(--spacing-sm);
-            border: none;
-            border-radius: var(--border-radius-sm);
+        .user-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-item {
+            text-align: center;
+        }
+
+        .detail-label {
+            color: #666;
             font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
             cursor: pointer;
-            transition: var(--transition-normal);
-            margin-left: var(--spacing-xs);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
-        .btn-edit {
-            background: var(--primary-color);
-            color: var(--text-light);
+        .btn-primary {
+            background: #25D366;
+            color: white;
         }
 
-        .btn-edit:hover {
-            background: var(--primary-dark);
+        .btn-primary:hover {
+            background: #128C7E;
+            transform: translateY(-2px);
         }
 
-        .btn-delete {
-            background: var(--danger-color);
-            color: var(--text-light);
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
         }
 
-        .btn-delete:hover {
-            background: #dc2626;
+        .btn-secondary:hover {
+            background: #5a6268;
         }
 
-        .btn-toggle {
-            background: var(--warning-color);
-            color: var(--text-light);
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
         }
 
-        .btn-toggle:hover {
-            background: #d97706;
+        .btn-warning:hover {
+            background: #e0a800;
         }
 
-        .package-card {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-md);
-            padding: var(--spacing-lg);
-            margin-bottom: var(--spacing-md);
+        .btn-danger {
+            background: #dc3545;
+            color: white;
         }
 
-        .package-price {
-            font-size: var(--font-size-xl);
-            font-weight: 700;
-            color: var(--primary-color);
+        .btn-danger:hover {
+            background: #c82333;
         }
 
-        .feature-list {
-            list-style: none;
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
             padding: 0;
-            margin: var(--spacing-md) 0;
-        }
-
-        .feature-list li {
-            padding: var(--spacing-xs) 0;
-            color: var(--text-primary);
-        }
-
-        .feature-list li:before {
-            content: "✓";
-            color: var(--success-color);
-            font-weight: bold;
-            margin-left: var(--spacing-sm);
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
 
         .modal-header {
-            background: var(--primary-color);
-            color: var(--text-light);
+            background: #25D366;
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .form-floating {
-            margin-bottom: var(--spacing-md);
+        .modal-header h3 {
+            margin: 0;
+            font-size: 20px;
         }
 
-        .form-floating > .form-control {
-            padding: var(--spacing-md);
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: none;
         }
 
-        .form-floating > label {
-            padding: var(--spacing-md);
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            z-index: 9999;
+            min-width: 300px;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: #28a745;
+        }
+
+        .notification.error {
+            background: #dc3545;
+        }
+
+        .notification.warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .notification.info {
+            background: #17a2b8;
+        }
+
+        .bulk-actions {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .bulk-actions.show {
+            display: block;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #25D366;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 15px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .user-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .user-actions {
+                justify-content: center;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fas fa-cog me-2"></i>
-                لوحة الأدمن
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="dashboard.html">
-                    <i class="fas fa-tachometer-alt me-1"></i>
-                    لوحة التحكم
-                </a>
-                <a class="nav-link" href="api-management.html">
-                    <i class="fas fa-code me-1"></i>
-                    إدارة API
-                </a>
-                <a class="nav-link" href="#" onclick="logout()">
-                    <i class="fas fa-sign-out-alt me-1"></i>
-                    تسجيل الخروج
-                </a>
-            </div>
+    <nav class="navbar">
+        <h1>لوحة الأدمن</h1>
+        <div class="nav-actions">
+            <a href="/dashboard" class="back-btn">← العودة للرئيسية</a>
+            <button class="back-btn" onclick="logout()">تسجيل الخروج</button>
         </div>
     </nav>
 
-    <div class="container main-container">
+    <div class="container">
         <!-- Header -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <h2><i class="fas fa-cog me-2"></i>لوحة الأدمن</h2>
-                <p class="text-muted">إدارة المستخدمين والباقات والنظام</p>
-            </div>
-            <div class="col-md-4 text-end">
-                <button class="btn btn-primary" onclick="showAddUserModal()">
-                    <i class="fas fa-user-plus me-1"></i>
-                    إضافة مستخدم
-                </button>
-                <button class="btn btn-success" onclick="showAddPackageModal()">
-                    <i class="fas fa-plus me-1"></i>
-                    إضافة باقة
-                </button>
-            </div>
+        <div class="header-section">
+            <h2>⚙️ لوحة الأدمن</h2>
+            <p>إدارة المستخدمين والجلسات والنظام</p>
         </div>
 
         <!-- Statistics -->
         <div class="stats-grid">
-            <div class="stat-item">
+            <div class="stat-card">
                 <div class="stat-number" id="totalUsers">0</div>
                 <div class="stat-label">إجمالي المستخدمين</div>
             </div>
-            <div class="stat-item">
+            <div class="stat-card">
                 <div class="stat-number" id="activeUsers">0</div>
                 <div class="stat-label">المستخدمين النشطين</div>
             </div>
-            <div class="stat-item">
+            <div class="stat-card">
                 <div class="stat-number" id="totalSessions">0</div>
                 <div class="stat-label">إجمالي الجلسات</div>
             </div>
-            <div class="stat-item">
-                <div class="stat-number" id="totalSubscriptions">0</div>
-                <div class="stat-label">إجمالي الاشتراكات</div>
+            <div class="stat-card">
+                <div class="stat-number" id="connectedSessions">0</div>
+                <div class="stat-label">الجلسات المتصلة</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalMessages">0</div>
+                <div class="stat-label">الرسائل المرسلة</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="apiCalls">0</div>
+                <div class="stat-label">استدعاءات API</div>
             </div>
         </div>
 
         <!-- Tabs -->
-        <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
-                    <i class="fas fa-users me-2"></i>
-                    المستخدمين
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="packages-tab" data-bs-toggle="tab" data-bs-target="#packages" type="button" role="tab">
-                    <i class="fas fa-boxes me-2"></i>
-                    الباقات
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="subscriptions-tab" data-bs-toggle="tab" data-bs-target="#subscriptions" type="button" role="tab">
-                    <i class="fas fa-credit-card me-2"></i>
-                    الاشتراكات
-                </button>
-            </li>
-        </ul>
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('users')">
+                👥 المستخدمين
+            </button>
+            <button class="tab-button" onclick="switchTab('sessions')">
+                📱 الجلسات
+            </button>
+            <button class="tab-button" onclick="switchTab('packages')">
+                📦 الباقات
+            </button>
+            <button class="tab-button" onclick="switchTab('settings')">
+                ⚙️ الإعدادات
+            </button>
+        </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content" id="adminTabContent">
-            <!-- Users Tab -->
-            <div class="tab-pane fade show active" id="users" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-users me-2"></i>
-                            إدارة المستخدمين
-                        </h5>
+        <!-- Users Tab -->
+        <div id="users-tab" class="tab-content active">
+            <div class="content-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>👥 إدارة المستخدمين</h3>
+                    <div>
+                        <button class="btn btn-primary" onclick="showAddUserModal()">
+                            ➕ إضافة مستخدم
+                        </button>
+                        <button class="btn btn-secondary" onclick="toggleBulkActions()">
+                            📋 إجراءات جماعية
+                        </button>
                     </div>
-                    <div class="card-body">
-                        <div id="usersList">
-                            <!-- Users will be loaded here -->
-                        </div>
+                </div>
+                
+                <input type="text" class="search-box" id="userSearch" placeholder="🔍 البحث في المستخدمين..." onkeyup="searchUsers()">
+                
+                <div class="bulk-actions" id="bulkActions">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span>المحدد: <span id="selectedCount">0</span></span>
+                        <button class="btn btn-warning" onclick="bulkToggleStatus()">تفعيل/إيقاف</button>
+                        <button class="btn btn-info" onclick="bulkUpdateSessions()">تحديث الجلسات</button>
+                        <button class="btn btn-danger" onclick="bulkDelete()">حذف</button>
+                        <button class="btn btn-secondary" onclick="clearSelection()">إلغاء التحديد</button>
+                    </div>
+                </div>
+                
+                <div id="usersList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>جاري تحميل المستخدمين...</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Packages Tab -->
-            <div class="tab-pane fade" id="packages" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-boxes me-2"></i>
-                            إدارة الباقات
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="packagesList">
-                            <!-- Packages will be loaded here -->
-                        </div>
+        <!-- Sessions Tab -->
+        <div id="sessions-tab" class="tab-content">
+            <div class="content-card">
+                <h3>📱 إدارة الجلسات</h3>
+                <div id="sessionsList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>جاري تحميل الجلسات...</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Subscriptions Tab -->
-            <div class="tab-pane fade" id="subscriptions" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-credit-card me-2"></i>
-                            إدارة الاشتراكات
-                        </h5>
+        <!-- Packages Tab -->
+        <div id="packages-tab" class="tab-content">
+            <div class="content-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>📦 إدارة الباقات</h3>
+                    <button class="btn btn-primary" onclick="showAddPackageModal()">
+                        ➕ إضافة باقة
+                    </button>
+                </div>
+                <div id="packagesList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>جاري تحميل الباقات...</p>
                     </div>
-                    <div class="card-body">
-                        <div id="subscriptionsList">
-                            <!-- Subscriptions will be loaded here -->
-                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings-tab" class="tab-content">
+            <div class="content-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>⚙️ إعدادات النظام</h3>
+                    <a href="/limits.html" class="btn btn-info" target="_blank">
+                        📊 عرض حدود النظام
+                    </a>
+                </div>
+                <div id="settingsContent">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>جاري تحميل الإعدادات...</p>
                     </div>
                 </div>
             </div>
@@ -309,130 +659,217 @@
     </div>
 
     <!-- Add User Modal -->
-    <div class="modal fade" id="addUserModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-user-plus me-2"></i>
-                        إضافة مستخدم جديد
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addUserForm">
-                        <div class="form-floating">
-                            <input type="text" class="form-control" id="newUsername" placeholder="اسم المستخدم" required>
-                            <label for="newUsername">اسم المستخدم</label>
-                        </div>
-                        <div class="form-floating">
-                            <input type="email" class="form-control" id="newEmail" placeholder="البريد الإلكتروني" required>
-                            <label for="newEmail">البريد الإلكتروني</label>
-                        </div>
-                        <div class="form-floating">
-                            <input type="password" class="form-control" id="newPassword" placeholder="كلمة المرور" required>
-                            <label for="newPassword">كلمة المرور</label>
-                        </div>
-                        <div class="form-floating">
-                            <input type="number" class="form-control" id="newMaxSessions" placeholder="الحد الأقصى للجلسات" value="1" required>
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>➕ إضافة مستخدم جديد</h3>
+                <button class="close" onclick="closeModal('addUserModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="form-group">
+                        <label for="newUsername">اسم المستخدم</label>
+                        <input type="text" id="newUsername" placeholder="أدخل اسم المستخدم" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newEmail">البريد الإلكتروني</label>
+                        <input type="email" id="newEmail" placeholder="أدخل البريد الإلكتروني" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">كلمة المرور</label>
+                        <input type="password" id="newPassword" placeholder="أدخل كلمة المرور" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="newMaxSessions">الحد الأقصى للجلسات</label>
+                            <input type="number" id="newMaxSessions" placeholder="1" value="1" min="1" max="10" required>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="newIsAdmin">
-                            <label class="form-check-label" for="newIsAdmin">
-                                أدمن
-                            </label>
+                        <div class="form-group">
+                            <label for="newSessionDays">عدد الأيام لكل جلسة</label>
+                            <input type="number" id="newSessionDays" placeholder="30" value="30" min="1" max="365" required>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="button" class="btn btn-primary" onclick="addUser()">
-                        <i class="fas fa-plus me-2"></i>
-                        إضافة المستخدم
-                    </button>
-                </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="newIsAdmin" style="width: auto;">
+                            صلاحيات أدمن
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addUserModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="addUser()">إضافة المستخدم</button>
             </div>
         </div>
     </div>
 
     <!-- Add Package Modal -->
-    <div class="modal fade" id="addPackageModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-plus me-2"></i>
-                        إضافة باقة جديدة
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addPackageForm">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="packageId" placeholder="معرف الباقة" required>
-                                    <label for="packageId">معرف الباقة</label>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="packageName" placeholder="اسم الباقة" required>
-                                    <label for="packageName">اسم الباقة</label>
-                                </div>
-                            </div>
+    <div id="addPackageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📦 إضافة باقة جديدة</h3>
+                <button class="close" onclick="closeModal('addPackageModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addPackageForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="packageId">معرف الباقة</label>
+                            <input type="text" id="packageId" placeholder="مثال: basic, premium, pro" required>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="number" class="form-control" id="packagePrice" placeholder="السعر" step="0.01" required>
-                                    <label for="packagePrice">السعر (USD)</label>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="number" class="form-control" id="packageDuration" placeholder="المدة بالأيام" required>
-                                    <label for="packageDuration">المدة بالأيام</label>
-                                </div>
-                            </div>
+                        <div class="form-group">
+                            <label for="packageName">اسم الباقة</label>
+                            <input type="text" id="packageName" placeholder="مثال: الباقة الأساسية" required>
                         </div>
-                        <div class="form-floating">
-                            <input type="number" class="form-control" id="packageMaxSessions" placeholder="الحد الأقصى للجلسات" required>
-                            <label for="packageMaxSessions">الحد الأقصى للجلسات</label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="packagePrice">السعر (USD)</label>
+                            <input type="number" id="packagePrice" placeholder="0.00" step="0.01" min="0" required>
                         </div>
-                        <div class="form-floating">
-                            <textarea class="form-control" id="packageFeatures" placeholder="المميزات (سطر واحد لكل ميزة)" style="height: 100px"></textarea>
-                            <label for="packageFeatures">المميزات (سطر واحد لكل ميزة)</label>
+                        <div class="form-group">
+                            <label for="packageDuration">المدة بالأيام</label>
+                            <input type="number" id="packageDuration" placeholder="30" min="1" max="365" required>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="button" class="btn btn-primary" onclick="addPackage()">
-                        <i class="fas fa-plus me-2"></i>
-                        إضافة الباقة
-                    </button>
-                </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="packageMaxSessions">الحد الأقصى للجلسات</label>
+                        <input type="number" id="packageMaxSessions" placeholder="1" min="1" max="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="packageFeatures">المميزات (سطر واحد لكل ميزة)</label>
+                        <textarea id="packageFeatures" placeholder="مثال:&#10;إرسال رسائل غير محدود&#10;دعم الملفات&#10;API متقدم" style="height: 100px"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addPackageModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="addPackage()">إضافة الباقة</button>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Edit User Modal -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ تعديل المستخدم</h3>
+                <button class="close" onclick="closeModal('editUserModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+                    <div class="form-group">
+                        <label for="editUsername">اسم المستخدم</label>
+                        <input type="text" id="editUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editEmail">البريد الإلكتروني</label>
+                        <input type="email" id="editEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editPassword">كلمة المرور الجديدة (اتركها فارغة للاحتفاظ بالحالية)</label>
+                        <input type="password" id="editPassword">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editMaxSessions">الحد الأقصى للجلسات</label>
+                            <input type="number" id="editMaxSessions" min="1" max="10" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editSessionDays">عدد الأيام لكل جلسة</label>
+                            <input type="number" id="editSessionDays" min="1" max="365" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="editIsAdmin" style="width: auto;">
+                            صلاحيات أدمن
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="editIsActive" style="width: auto;">
+                            الحساب نشط
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('editUserModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="updateUser()">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentUser = null;
         let users = [];
         let packages = [];
         let subscriptions = [];
+        let sessions = [];
+        let selectedUsers = new Set();
+        let currentTab = 'users';
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadUserInfo();
             loadStats();
             loadUsers();
+            loadSessions();
             loadPackages();
-            loadSubscriptions();
+            loadSettings();
         });
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            currentTab = tabName;
+
+            // Load data for the tab
+            switch(tabName) {
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'sessions':
+                    loadSessions();
+                    break;
+                case 'packages':
+                    loadPackages();
+                    break;
+                case 'settings':
+                    loadSettings();
+                    break;
+            }
+        }
+
+        // Modal functions
+        function showModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
 
         async function loadUserInfo() {
             try {
@@ -448,6 +885,645 @@
                 console.error('Error loading user info:', error);
                 window.location.href = '/dashboard';
             }
+        }
+
+        // User management functions
+        function showAddUserModal() {
+            document.getElementById('addUserForm').reset();
+            showModal('addUserModal');
+        }
+
+        function showAddPackageModal() {
+            document.getElementById('addPackageForm').reset();
+            showModal('addPackageModal');
+        }
+
+        async function addUser() {
+            const username = document.getElementById('newUsername').value.trim();
+            const email = document.getElementById('newEmail').value.trim();
+            const password = document.getElementById('newPassword').value;
+            const maxSessions = parseInt(document.getElementById('newMaxSessions').value);
+            const sessionDays = parseInt(document.getElementById('newSessionDays').value);
+            const isAdmin = document.getElementById('newIsAdmin').checked;
+
+            if (!username || !email || !password) {
+                showNotification('error', 'يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username, email, password, maxSessions, sessionDays, isAdmin
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('addUserModal');
+                    showNotification('success', 'تم إضافة المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showNotification('error', data.error || 'فشل في إضافة المستخدم');
+                }
+            } catch (error) {
+                console.error('Error adding user:', error);
+                showNotification('error', 'فشل في إضافة المستخدم');
+            }
+        }
+
+        // Notification system
+        function showNotification(type, message) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'} ${message}
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 5000);
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                window.location.href = '/';
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                const data = await response.json();
+                if (data.success) {
+                    users = data.users;
+                    displayUsers();
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('error', 'فشل في تحميل المستخدمين');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const data = await response.json();
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
+                    document.getElementById('activeUsers').textContent = stats.activeUsers || 0;
+                    document.getElementById('totalSessions').textContent = stats.totalSessions || 0;
+                    document.getElementById('connectedSessions').textContent = stats.connectedSessions || 0;
+                    document.getElementById('totalMessages').textContent = stats.totalMessages || 0;
+                    document.getElementById('apiCalls').textContent = stats.apiCalls || 0;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Additional functions
+        function editUser(userId) {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+
+            document.getElementById('editUserId').value = user.id;
+            document.getElementById('editUsername').value = user.username;
+            document.getElementById('editEmail').value = user.email;
+            document.getElementById('editMaxSessions').value = user.max_sessions || 1;
+            document.getElementById('editSessionDays').value = user.session_ttl_days || 30;
+            document.getElementById('editIsAdmin').checked = user.is_admin || false;
+            document.getElementById('editIsActive').checked = user.is_active || false;
+
+            showModal('editUserModal');
+        }
+
+        async function updateUser() {
+            const userId = document.getElementById('editUserId').value;
+            const username = document.getElementById('editUsername').value.trim();
+            const email = document.getElementById('editEmail').value.trim();
+            const password = document.getElementById('editPassword').value;
+            const maxSessions = parseInt(document.getElementById('editMaxSessions').value);
+            const sessionDays = parseInt(document.getElementById('editSessionDays').value);
+            const isAdmin = document.getElementById('editIsAdmin').checked;
+            const isActive = document.getElementById('editIsActive').checked;
+
+            if (!username || !email) {
+                showNotification('error', 'يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username, email, password, maxSessions, sessionDays, isAdmin, isActive
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('editUserModal');
+                    showNotification('success', 'تم تحديث المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showNotification('error', data.error || 'فشل في تحديث المستخدم');
+                }
+            } catch (error) {
+                console.error('Error updating user:', error);
+                showNotification('error', 'فشل في تحديث المستخدم');
+            }
+        }
+
+        async function toggleUserStatus(userId) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/toggle`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', 'تم تحديث حالة المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showNotification('error', data.error || 'فشل في تحديث حالة المستخدم');
+                }
+            } catch (error) {
+                console.error('Error toggling user status:', error);
+                showNotification('error', 'فشل في تحديث حالة المستخدم');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟ سيتم حذف جميع جلساته أيضاً.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', 'تم حذف المستخدم بنجاح');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showNotification('error', data.error || 'فشل في حذف المستخدم');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showNotification('error', 'فشل في حذف المستخدم');
+            }
+        }
+
+        // Bulk actions
+        function toggleUserSelection(userId) {
+            if (selectedUsers.has(userId)) {
+                selectedUsers.delete(userId);
+            } else {
+                selectedUsers.add(userId);
+            }
+            updateBulkActions();
+        }
+
+        function updateBulkActions() {
+            const count = selectedUsers.size;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('bulkActions').classList.toggle('show', count > 0);
+        }
+
+        function toggleBulkActions() {
+            const bulkActions = document.getElementById('bulkActions');
+            bulkActions.classList.toggle('show');
+        }
+
+        function clearSelection() {
+            selectedUsers.clear();
+            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+            updateBulkActions();
+        }
+
+        function searchUsers() {
+            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+            const userCards = document.querySelectorAll('.user-card');
+            
+            userCards.forEach(card => {
+                const username = card.querySelector('h6').textContent.toLowerCase();
+                const email = card.querySelector('p').textContent.toLowerCase();
+                
+                if (username.includes(searchTerm) || email.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // Package management
+        async function addPackage() {
+            const id = document.getElementById('packageId').value.trim();
+            const name = document.getElementById('packageName').value.trim();
+            const price = parseFloat(document.getElementById('packagePrice').value);
+            const durationDays = parseInt(document.getElementById('packageDuration').value);
+            const maxSessions = parseInt(document.getElementById('packageMaxSessions').value);
+            const features = document.getElementById('packageFeatures').value.split('\n').filter(f => f.trim());
+
+            if (!id || !name || !price || !durationDays || !maxSessions) {
+                showNotification('error', 'يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/packages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id, name, price, durationDays, maxSessions, features
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('addPackageModal');
+                    showNotification('success', 'تم إضافة الباقة بنجاح');
+                    loadPackages();
+                } else {
+                    showNotification('error', data.error || 'فشل في إضافة الباقة');
+                }
+            } catch (error) {
+                console.error('Error adding package:', error);
+                showNotification('error', 'فشل في إضافة الباقة');
+            }
+        }
+
+        function editPackage(packageId) {
+            showNotification('info', 'ميزة تعديل الباقة قيد التطوير');
+        }
+
+        async function deletePackage(packageId) {
+            if (!confirm('هل أنت متأكد من حذف هذه الباقة؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/packages/${packageId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', 'تم حذف الباقة بنجاح');
+                    loadPackages();
+                } else {
+                    showNotification('error', data.error || 'فشل في حذف الباقة');
+                }
+            } catch (error) {
+                console.error('Error deleting package:', error);
+                showNotification('error', 'فشل في حذف الباقة');
+            }
+        }
+
+        // Session management
+        function viewSession(sessionId) {
+            window.open(`/session/${sessionId}`, '_blank');
+        }
+
+        async function restartSession(sessionId) {
+            try {
+                const response = await fetch(`/api/admin/sessions/${sessionId}/restart`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', 'تم إعادة تشغيل الجلسة بنجاح');
+                    loadSessions();
+                } else {
+                    showNotification('error', data.error || 'فشل في إعادة تشغيل الجلسة');
+                }
+            } catch (error) {
+                console.error('Error restarting session:', error);
+                showNotification('error', 'فشل في إعادة تشغيل الجلسة');
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (!confirm('هل أنت متأكد من حذف هذه الجلسة؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/sessions/${sessionId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', 'تم حذف الجلسة بنجاح');
+                    loadSessions();
+                    loadStats();
+                } else {
+                    showNotification('error', data.error || 'فشل في حذف الجلسة');
+                }
+            } catch (error) {
+                console.error('Error deleting session:', error);
+                showNotification('error', 'فشل في حذف الجلسة');
+            }
+        }
+
+        function viewUserSessions(userId) {
+            switchTab('sessions');
+            // Filter sessions by user
+            const userSessions = sessions.filter(s => s.user_id === userId);
+            if (userSessions.length === 0) {
+                showNotification('info', 'لا توجد جلسات لهذا المستخدم');
+            }
+        }
+
+        function editSettings() {
+            showNotification('info', 'ميزة تعديل الإعدادات قيد التطوير');
+        }
+
+        function displayUsers() {
+            const container = document.getElementById('usersList');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">لا توجد مستخدمين</p>';
+                return;
+            }
+
+            let html = '';
+            users.forEach(user => {
+                const statusClass = user.is_admin ? 'status-admin' : 
+                                  user.is_active ? 'status-active' : 'status-inactive';
+                const statusText = user.is_admin ? 'أدمن' : 
+                                 user.is_active ? 'نشط' : 'موقوف';
+
+                html += `
+                    <div class="user-card">
+                        <div class="user-header">
+                            <div class="user-info">
+                                <h6>${user.username}</h6>
+                                <p>${user.email}</p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="user-status ${statusClass}">${statusText}</span>
+                                <input type="checkbox" class="user-checkbox" value="${user.id}" onchange="toggleUserSelection(${user.id})">
+                            </div>
+                        </div>
+                        
+                        <div class="user-details">
+                            <div class="detail-item">
+                                <div class="detail-label">الجلسات المسموحة</div>
+                                <div class="detail-value">${user.max_sessions || 1}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">أيام الجلسة</div>
+                                <div class="detail-value">${user.session_ttl_days || 30} يوم</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">تاريخ الإنشاء</div>
+                                <div class="detail-value">${new Date(user.created_at).toLocaleDateString('ar-SA')}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">آخر نشاط</div>
+                                <div class="detail-value">${user.last_login ? new Date(user.last_login).toLocaleDateString('ar-SA') : 'لم يسجل دخول'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="user-actions">
+                            <button class="btn btn-primary" onclick="editUser(${user.id})">
+                                ✏️ تعديل
+                            </button>
+                            <button class="btn btn-warning" onclick="toggleUserStatus(${user.id})">
+                                ${user.is_active ? '⏸️ إيقاف' : '▶️ تفعيل'}
+                            </button>
+                            <button class="btn btn-info" onclick="viewUserSessions(${user.id})">
+                                📱 الجلسات
+                            </button>
+                            <button class="btn btn-danger" onclick="deleteUser(${user.id})">
+                                🗑️ حذف
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadSessions() {
+            try {
+                const response = await fetch('/api/admin/sessions');
+                const data = await response.json();
+                if (data.success) {
+                    sessions = data.sessions;
+                    displaySessions();
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                showNotification('error', 'فشل في تحميل الجلسات');
+            }
+        }
+
+        function displaySessions() {
+            const container = document.getElementById('sessionsList');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">لا توجد جلسات</p>';
+                return;
+            }
+
+            let html = '';
+            sessions.forEach(session => {
+                const statusClass = session.status === 'connected' ? 'status-active' : 
+                                  session.status === 'waiting_for_qr' ? 'status-warning' : 'status-inactive';
+                const statusText = session.status === 'connected' ? 'متصل' : 
+                                 session.status === 'waiting_for_qr' ? 'انتظار QR' : 'غير متصل';
+
+                html += `
+                    <div class="user-card">
+                        <div class="user-header">
+                            <div class="user-info">
+                                <h6>${session.session_name}</h6>
+                                <p>المستخدم: ${session.username}</p>
+                            </div>
+                            <span class="user-status ${statusClass}">${statusText}</span>
+                        </div>
+                        
+                        <div class="user-details">
+                            <div class="detail-item">
+                                <div class="detail-label">معرف الجلسة</div>
+                                <div class="detail-value">${session.session_id}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">تاريخ الإنشاء</div>
+                                <div class="detail-value">${new Date(session.created_at).toLocaleDateString('ar-SA')}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">آخر تحديث</div>
+                                <div class="detail-value">${new Date(session.updated_at).toLocaleDateString('ar-SA')}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">الرسائل المرسلة</div>
+                                <div class="detail-value">${session.message_count || 0}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="user-actions">
+                            <button class="btn btn-primary" onclick="viewSession(${session.id})">
+                                👁️ عرض
+                            </button>
+                            <button class="btn btn-warning" onclick="restartSession(${session.id})">
+                                🔄 إعادة تشغيل
+                            </button>
+                            <button class="btn btn-danger" onclick="deleteSession(${session.id})">
+                                🗑️ حذف
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadPackages() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                if (data.success && data.packages) {
+                    packages = data.packages;
+                    displayPackages();
+                }
+            } catch (error) {
+                console.error('Error loading packages:', error);
+                showNotification('error', 'فشل في تحميل الباقات');
+            }
+        }
+
+        function displayPackages() {
+            const container = document.getElementById('packagesList');
+            
+            if (packages.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">لا توجد باقات</p>';
+                return;
+            }
+
+            let html = '';
+            packages.forEach(pkg => {
+                html += `
+                    <div class="user-card">
+                        <div class="user-header">
+                            <div class="user-info">
+                                <h6>${pkg.name}</h6>
+                                <p>معرف: ${pkg.id}</p>
+                            </div>
+                            <div style="font-size: 24px; font-weight: bold; color: #25D366;">
+                                $${pkg.price}
+                            </div>
+                        </div>
+                        
+                        <div class="user-details">
+                            <div class="detail-item">
+                                <div class="detail-label">المدة</div>
+                                <div class="detail-value">${pkg.durationDays} يوم</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">الحد الأقصى للجلسات</div>
+                                <div class="detail-value">${pkg.maxSessions}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">المميزات</div>
+                                <div class="detail-value">${pkg.features ? pkg.features.length : 0} ميزة</div>
+                            </div>
+                        </div>
+                        
+                        <div class="user-actions">
+                            <button class="btn btn-primary" onclick="editPackage('${pkg.id}')">
+                                ✏️ تعديل
+                            </button>
+                            <button class="btn btn-danger" onclick="deletePackage('${pkg.id}')">
+                                🗑️ حذف
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/admin/settings');
+                const data = await response.json();
+                if (data.success) {
+                    displaySettings(data.settings);
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showNotification('error', 'فشل في تحميل الإعدادات');
+            }
+        }
+
+        function displaySettings(settings) {
+            const container = document.getElementById('settingsContent');
+            
+            container.innerHTML = `
+                <div class="user-card">
+                    <h4>⚙️ إعدادات النظام العامة</h4>
+                    <div class="user-details">
+                        <div class="detail-item">
+                            <div class="detail-label">رقم هاتف الأدمن</div>
+                            <div class="detail-value">${settings.adminPhone || 'غير محدد'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">البريد الإلكتروني للأدمن</div>
+                            <div class="detail-value">${settings.adminEmail || 'غير محدد'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">مدة الجلسة الافتراضية</div>
+                            <div class="detail-value">${settings.defaultSessionTtl || 30} يوم</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">الحد الأقصى للجلسات الافتراضي</div>
+                            <div class="detail-value">${settings.defaultMaxSessions || 1}</div>
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        <button class="btn btn-primary" onclick="editSettings()">
+                            ✏️ تعديل الإعدادات
+                        </button>
+                    </div>
+                </div>
+            `;
         }
 
         async function loadStats() {

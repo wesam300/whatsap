@@ -15,9 +15,6 @@
         .card { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 16px; }
         .card h4 { margin-bottom: 8px; color: #333; }
         .renew-note { background: #fff3cd; border: 1px solid #ffe08a; padding: 10px; border-radius: 8px; margin-top: 10px; }
-        .packages { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 12px; }
-        .package { border: 1px solid #e1e5e9; border-radius: 10px; padding: 12px; background: #f8f9fa; }
-        .package h4 { margin: 6px 0; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -37,12 +34,107 @@
 
         .navbar h1 {
             font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .navbar h1::before {
+            content: "📱";
+            font-size: 28px;
         }
 
         .navbar .user-info {
             display: flex;
             align-items: center;
             gap: 20px;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 280px;
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .sidebar.open {
+            transform: translateX(0);
+        }
+        
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #34495e;
+            margin-bottom: 20px;
+        }
+        
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #ecf0f1;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin: 0;
+        }
+        
+        .sidebar-menu a {
+            display: block;
+            padding: 15px 20px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: #34495e;
+            color: #ecf0f1;
+            border-left-color: #25D366;
+        }
+        
+        .sidebar-menu .icon {
+            margin-left: 10px;
+            width: 20px;
+            display: inline-block;
+        }
+        
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+        
+        .sidebar-overlay.open {
+            display: block;
         }
 
         .navbar .username {
@@ -115,13 +207,14 @@
         }
 
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-width: 100px;
         }
 
         .btn-primary {
@@ -131,7 +224,8 @@
 
         .btn-primary:hover {
             background: #128C7E;
-            transform: translateY(-2px);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
         }
 
         .btn-secondary {
@@ -141,6 +235,8 @@
 
         .btn-secondary:hover {
             background: #5a6268;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
         }
 
         .btn-danger {
@@ -150,6 +246,8 @@
 
         .btn-danger:hover {
             background: #c82333;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
         }
 
         .btn-success {
@@ -159,6 +257,8 @@
 
         .btn-success:hover {
             background: #218838;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
         }
 
         .sessions-grid {
@@ -170,15 +270,17 @@
 
         .session-card {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border: 1px solid #f0f0f0;
         }
 
         .session-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+            border-color: #25D366;
         }
 
         .session-header {
@@ -212,9 +314,143 @@
             color: #856404;
         }
 
+        .status-authenticated {
+            background: #cce5ff;
+            color: #004085;
+        }
+
         .status-connected {
             background: #d4edda;
             color: #155724;
+        }
+
+        .status-auth_failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-loading {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #25D366;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .session-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .session-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .session-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .session-meta {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .session-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn-refresh {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-refresh:hover {
+            background: #138496;
+        }
+        
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        
+        .btn-qr {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-qr:hover {
+            background: #218838;
+        }
+        
+        .btn-open {
+            background: #25D366;
+            color: white;
+        }
+        
+        .btn-open:hover {
+            background: #1ea952;
         }
 
         .session-actions {
@@ -328,12 +564,19 @@
             .container {
                 padding: 20px 15px;
             }
+            
+            .sidebar {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
     <nav class="navbar">
-        <h1>WhatsApp Dashboard</h1>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <h1>WhatsApp Dashboard</h1>
+        </div>
         <div class="user-info">
             <span class="username" id="username">User</span>
             <span id="adminBadge" class="admin-badge" style="display:none;">ADMIN</span>
@@ -342,42 +585,51 @@
         </div>
     </nav>
 
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>📱 القائمة</h3>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard" class="active"><span class="icon">🏠</span>الرئيسية</a></li>
+            <li><a href="/api-test"><span class="icon">🧪</span>اختبار API</a></li>
+            <li><a href="/api-docs"><span class="icon">📚</span>وثائق API</a></li>
+            <li><a href="/admin" id="adminSidebarLink" style="display:none;"><span class="icon">⚙️</span>لوحة الأدمن</a></li>
+        </ul>
+    </div>
+
     <div class="container">
+        <!-- إحصائيات النظام -->
+        <div id="stats" class="stats-grid"></div>
+        
+        <!-- إنشاء جلسة جديدة -->
         <div class="header-section">
-            <h2>Create New Session</h2>
+            <h2>إنشاء جلسة جديدة</h2>
             <div class="create-session-form">
                 <div class="form-group">
-                    <label for="sessionName">Session Name</label>
-                    <input type="text" id="sessionName" placeholder="e.g., Personal WhatsApp, Business Account">
+                    <label for="sessionName">اسم الجلسة</label>
+                    <input type="text" id="sessionName" placeholder="مثال: واتساب شخصي، حساب العمل">
                 </div>
-                <button class="btn btn-primary" onclick="createSession()">Create Session</button>
+                <button class="btn btn-primary" onclick="createSession()">إنشاء جلسة</button>
             </div>
-            
-            <div class="dashboard-actions" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e5e9;">
-                <h3 style="margin-bottom: 15px; color: #555;">إدارة النظام</h3>
-                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                    <a href="/api-test" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
-                        🧪 اختبار API
-                    </a>
-                    <a href="/api-management" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
-                        🔑 إدارة API
-                    </a>
-                    <a href="/api-docs" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
-                        📚 وثائق API
-                    </a>
-                    <a href="/subscriptions" class="btn btn-success" style="text-decoration: none; display: inline-block;">
-                        💳 الباقات والاشتراكات
-                    </a>
-                    <a id="adminButton" href="/admin" class="btn btn-secondary" style="text-decoration: none; display: none;">
-                        ⚙️ لوحة الأدمن
-                    </a>
-                    <a id="packagesButton" href="/packages" class="btn btn-warning" style="text-decoration: none; display: none;">
-                        📦 إدارة الباقات
-                    </a>
-                </div>
-                <div id="stats" class="stats-cards"></div>
-                <div id="renewContainer" class="renew-note" style="display:none;"></div>
-                <div id="packagesContainer" class="packages" style="margin-top:12px;"></div>
+        </div>
+        
+        <!-- أدوات النظام -->
+        <div class="dashboard-actions" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e5e9;">
+            <h3 style="margin-bottom: 15px; color: #555;">أدوات النظام</h3>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <a href="/api-test" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
+                    🧪 اختبار API
+                </a>
+                <a href="/api-docs" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
+                    📚 وثائق API
+                </a>
+                <a id="adminButton" href="/admin" class="btn btn-secondary" style="text-decoration: none; display: none;">
+                    ⚙️ لوحة الأدمن
+                </a>
             </div>
         </div>
 
@@ -409,8 +661,24 @@
                 updateSessionQR(data.sessionId, data.qrCode);
             });
             
+            socket.on('session_authenticated', function(data) {
+                updateSessionStatus(data.sessionId, 'authenticated');
+                hideSessionQR(data.sessionId);
+            });
+            
             socket.on('session_ready', function(data) {
                 updateSessionStatus(data.sessionId, 'connected');
+                hideSessionQR(data.sessionId);
+            });
+            
+            socket.on('session_auth_failure', function(data) {
+                updateSessionStatus(data.sessionId, 'auth_failure');
+                hideSessionQR(data.sessionId);
+                notificationSystem.error('فشل في التحقق من الهوية: ' + (data.error || 'خطأ غير معروف'));
+            });
+            
+            socket.on('session_loading', function(data) {
+                updateSessionStatus(data.sessionId, 'loading');
                 hideSessionQR(data.sessionId);
             });
             
@@ -438,16 +706,29 @@
                         document.getElementById('adminBadge').style.display = 'inline-block';
                         document.getElementById('adminLink').style.display = 'inline-block';
                         document.getElementById('adminButton').style.display = 'inline-block';
-                        document.getElementById('packagesButton').style.display = 'inline-block';
+                        document.getElementById('adminSidebarLink').style.display = 'block';
                     }
                     // Load stats
                     const statsRes = await fetch('/api/stats');
                     const stats = await statsRes.json();
                     if (stats.success) {
                         document.getElementById('stats').innerHTML = `
-                            <div class="card"><h4>Sessions</h4><div>${stats.stats.connectedSessions}/${stats.stats.totalSessions} connected</div></div>
-                            <div class="card"><h4>Msgs (24h)</h4><div>${stats.stats.messages24h}</div></div>
-                            <div class="card"><h4>API Calls (24h)</h4><div>${stats.stats.api24h}</div></div>
+                            <div class="stat-card">
+                                <div class="stat-number">${stats.stats.connectedSessions}/${stats.stats.totalSessions}</div>
+                                <div class="stat-label">الجلسات المتصلة</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${stats.stats.messages24h}</div>
+                                <div class="stat-label">الرسائل (24 ساعة)</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${stats.stats.api24h}</div>
+                                <div class="stat-label">استدعاءات API (24 ساعة)</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${sessions.length}</div>
+                                <div class="stat-label">إجمالي الجلسات</div>
+                            </div>
                         `;
                     }
                     // TTL/renew UI
@@ -462,19 +743,6 @@
                             <div>مدة صلاحية الجلسة الافتراضية: <strong>${me.user.sessionTtlDays || 5} أيام</strong>. لتجديد الاشتراك، تواصل مع مسؤول النظام على الرقم <a href="https://wa.me/${settings.adminPhone.replace(/[^\d]/g,'')}">${settings.adminPhone}</a>.</div>
                             <div style="margin-top:8px;"><button class="btn btn-primary" onclick="openRenewDialog()">تجديد الاشتراك</button></div>
                         `;
-                        // Packages
-                        const pkg = document.getElementById('packagesContainer');
-                        pkg.innerHTML = settings.packages.map(p => `
-                            <div class="package">
-                                <div style="font-size:12px;color:#555">${p.id.toUpperCase()}</div>
-                                <h4>${p.name}</h4>
-                                <div style="margin:4px 0;">${p.price} ${p.currency} / ${p.durationDays} أيام</div>
-                                <ul style="margin:6px 16px; color:#555;">
-                                    ${p.features.map(f => `<li>${f}</li>`).join('')}
-                                </ul>
-                                <button class="btn btn-primary" onclick="contactAdmin('${p.id}')">اطلب هذه الباقة</button>
-                            </div>
-                        `).join('');
                     }
                 }
             } catch (e) { /* ignore */ }
@@ -531,6 +799,12 @@
                 return;
             }
             
+            // Disable button during creation
+            const createBtn = document.querySelector('button[onclick="createSession()"]');
+            const originalText = createBtn.textContent;
+            createBtn.disabled = true;
+            createBtn.textContent = 'جاري الإنشاء...';
+            
             try {
                 const response = await fetch('/api/sessions', {
                     method: 'POST',
@@ -540,17 +814,29 @@
                     body: JSON.stringify({ sessionName })
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
                     document.getElementById('sessionName').value = '';
+                    notificationSystem.success(data.message || 'تم إنشاء الجلسة بنجاح!');
+                    
+                    // Force refresh sessions
                     await loadSessions();
+                    
+                    // Show success message and refresh after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
                 } else {
-                    const errorData = await response.json();
-                    notificationSystem.error('خطأ: ' + (errorData.error || 'فشل في إنشاء الجلسة'));
+                    notificationSystem.error('خطأ: ' + (data.error || 'فشل في إنشاء الجلسة'));
                 }
             } catch (error) {
                 console.error('Error creating session:', error);
-                alert('Failed to create session. Please try again.');
+                notificationSystem.error('فشل في إنشاء الجلسة. يرجى المحاولة مرة أخرى.');
+            } finally {
+                // Re-enable button
+                createBtn.disabled = false;
+                createBtn.textContent = originalText;
             }
         }
 
@@ -585,6 +871,12 @@
                 actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>`;
             } else if (session.status === 'connected') {
                 actionButtons = `
+                    <button class="btn btn-primary" onclick="viewSession(${session.id})">Open Session</button>
+                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>
+                `;
+            } else if (session.status === 'authenticated') {
+                actionButtons = `
+                    <button class="btn btn-primary" onclick="viewSession(${session.id})">Open Session</button>
                     <button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>
                 `;
             }
@@ -624,7 +916,6 @@
                         </div>
                     </div>
                     
-                    ${session.status === 'connected' ? `<button class="btn btn-primary view-session-btn" onclick="viewSession(${session.id})">Open Session</button>` : ''}
                 </div>
             `;
         }
@@ -691,7 +982,31 @@
         }
 
         function viewSession(sessionId) {
+            // التحقق من أن معرف الجلسة صحيح
+            if (!sessionId || isNaN(sessionId)) {
+                alert('خطأ: معرف الجلسة غير صحيح');
+                return;
+            }
+            
+            // الانتقال إلى صفحة الجلسة
             window.location.href = `/session/${sessionId}`;
+        }
+        
+        // Sidebar functions
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
         }
 
         async function logout() {

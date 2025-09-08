@@ -6,11 +6,29 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { MessageMedia } = require('whatsapp-web.js');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
 
 const router = express.Router();
+
+// Rate limiting for messages
+const messageLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // limit each IP to 60 messages per minute
+    message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة (60 رسالة)، يرجى المحاولة لاحقاً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const dailyMessageLimiter = rateLimit({
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    max: 10000, // limit each IP to 10000 messages per day
+    message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية (10,000 رسالة)، يرجى المحاولة غداً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // Ensure preflight CORS succeeds for all API endpoints (especially multipart ones)
 router.options('*', (req, res) => {
@@ -127,7 +145,7 @@ function validateSessionTokenMiddleware(req, res, next) {
 // ========================================
 
 // إرسال رسالة نصية (مع API Key في الهيدر)
-router.post('/send-message', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -225,7 +243,7 @@ router.post('/send-voice', validateApiKeyMiddleware, validateSessionTokenMiddlew
 });
 
 // إرسال رسالة نصية (مع API Key في الرابط)
-router.post('/:apiKey/send-message', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -292,7 +310,7 @@ router.post('/:apiKey/send-message', validateApiKeyMiddleware, validateSessionTo
 });
 
 // إرسال رسالة مع ملف (مع API Key في الهيدر)
-router.post('/send-media', validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
+router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -366,7 +384,7 @@ router.post('/send-media', validateApiKeyMiddleware, validateSessionTokenMiddlew
 });
 
 // إرسال رسالة مع ملف (مع API Key في الرابط)
-router.post('/:apiKey/send-media', validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
+router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
     const startTime = Date.now();
     
     try {

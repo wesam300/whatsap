@@ -29,12 +29,107 @@
 
         .navbar h1 {
             font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .navbar h1::before {
+            content: "💬";
+            font-size: 28px;
         }
 
         .navbar .nav-actions {
             display: flex;
             align-items: center;
             gap: 20px;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 280px;
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .sidebar.open {
+            transform: translateX(0);
+        }
+        
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #34495e;
+            margin-bottom: 20px;
+        }
+        
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #ecf0f1;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin: 0;
+        }
+        
+        .sidebar-menu a {
+            display: block;
+            padding: 15px 20px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: #34495e;
+            color: #ecf0f1;
+            border-left-color: #25D366;
+        }
+        
+        .sidebar-menu .icon {
+            margin-left: 10px;
+            width: 20px;
+            display: inline-block;
+        }
+        
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+        
+        .sidebar-overlay.open {
+            display: block;
         }
 
         .back-btn {
@@ -94,9 +189,24 @@
             color: #856404;
         }
 
+        .status-authenticated {
+            background: #cce5ff;
+            color: #004085;
+        }
+
         .status-connected {
             background: #d4edda;
             color: #155724;
+        }
+
+        .status-auth_failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-loading {
+            background: #e2e3e5;
+            color: #383d41;
         }
 
         .main-content {
@@ -223,6 +333,126 @@
             margin-right: 15px;
             transform: scale(1.2);
         }
+        
+        .message-types {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .message-type-btn {
+            padding: 8px 16px;
+            border: 2px solid #25D366;
+            background: white;
+            color: #25D366;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .message-type-btn.active {
+            background: #25D366;
+            color: white;
+        }
+        
+        .message-type-btn:hover {
+            background: #25D366;
+            color: white;
+        }
+        
+        .message-form {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+        
+        .file-upload {
+            border: 2px dashed #25D366;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload:hover {
+            background: #f8f9fa;
+        }
+        
+        .file-upload.dragover {
+            background: #e8f5e8;
+            border-color: #1ea952;
+        }
+        
+        .file-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .file-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 8px;
+        }
+        
+        .bulk-actions {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .bulk-actions h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .selected-count {
+            background: #25D366;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
 
         .contact-info {
             flex: 1;
@@ -310,13 +540,14 @@
         }
 
         .btn {
-            padding: 15px 30px;
+            padding: 10px 20px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-width: 100px;
         }
 
         .btn-primary {
@@ -432,16 +663,39 @@
             .container {
                 padding: 20px 15px;
             }
+            
+            .sidebar {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
     <nav class="navbar">
-        <h1>WhatsApp Session</h1>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <h1>WhatsApp Session</h1>
+        </div>
         <div class="nav-actions">
-            <a href="/dashboard" class="back-btn">← Back to Dashboard</a>
+            <a href="/dashboard" class="back-btn">← العودة للرئيسية</a>
         </div>
     </nav>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>📱 القائمة</h3>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard"><span class="icon">🏠</span>الرئيسية</a></li>
+            <li><a href="/api-test"><span class="icon">🧪</span>اختبار API</a></li>
+            <li><a href="/api-docs"><span class="icon">📚</span>وثائق API</a></li>
+            <li><a href="/admin" id="adminSidebarLink" style="display:none;"><span class="icon">⚙️</span>لوحة الأدمن</a></li>
+        </ul>
+    </div>
 
     <div class="container">
         <div class="session-header">
@@ -463,6 +717,81 @@
             </div>
         </div>
 
+        <!-- Message Types -->
+        <div class="message-types">
+            <button class="message-type-btn active" onclick="setMessageType('text')">📝 نص</button>
+            <button class="message-type-btn" onclick="setMessageType('image')">🖼️ صورة</button>
+            <button class="message-type-btn" onclick="setMessageType('document')">📄 مستند</button>
+            <button class="message-type-btn" onclick="setMessageType('audio')">🎵 صوت</button>
+            <button class="message-type-btn" onclick="setMessageType('video')">🎥 فيديو</button>
+            <button class="message-type-btn" onclick="setMessageType('location')">📍 موقع</button>
+        </div>
+        
+        <!-- Message Form -->
+        <div class="message-form">
+            <h3>إرسال رسالة</h3>
+            <form id="messageForm">
+                
+                <div id="textMessageForm" class="message-type-form">
+                    <div class="form-group">
+                        <label for="messageText">نص الرسالة:</label>
+                        <textarea id="messageText" placeholder="اكتب رسالتك هنا..."></textarea>
+                    </div>
+                </div>
+                
+                <div id="fileMessageForm" class="message-type-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="messageFile">اختر الملف:</label>
+                        <div class="file-upload" onclick="document.getElementById('messageFile').click()">
+                            <input type="file" id="messageFile" style="display: none;" onchange="handleFileSelect(event)">
+                            <div>📁 اضغط لاختيار الملف أو اسحبه هنا</div>
+                        </div>
+                        <div class="file-preview" id="filePreview"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="fileCaption">تعليق (اختياري):</label>
+                        <textarea id="fileCaption" placeholder="أضف تعليق للملف..."></textarea>
+                    </div>
+                </div>
+                
+                <div id="locationMessageForm" class="message-type-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="latitude">خط العرض:</label>
+                        <input type="number" id="latitude" step="any" placeholder="مثال: 24.7136">
+                    </div>
+                    <div class="form-group">
+                        <label for="longitude">خط الطول:</label>
+                        <input type="number" id="longitude" step="any" placeholder="مثال: 46.6753">
+                    </div>
+                    <div class="form-group">
+                        <label for="locationName">اسم الموقع (اختياري):</label>
+                        <input type="text" id="locationName" placeholder="مثال: الرياض، المملكة العربية السعودية">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="recipients">المستلمون:</label>
+                    <div class="selected-contacts empty" id="selectedContacts">
+                        لم يتم اختيار أي مستلم
+                    </div>
+                </div>
+                
+                <div class="message-status" id="messageStatus" style="display: none;"></div>
+                
+                <button type="submit" class="btn btn-primary">إرسال الرسالة</button>
+            </form>
+        </div>
+        
+        <!-- Bulk Actions -->
+        <div class="bulk-actions">
+            <h3>إجراءات جماعية <span class="selected-count" id="selectedCount" style="display: none;">0</span></h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" onclick="selectAllContacts()">تحديد الكل</button>
+                <button class="btn btn-secondary" onclick="deselectAllContacts()">إلغاء التحديد</button>
+                <button class="btn btn-primary" onclick="sendBulkMessage()">إرسال للجميع</button>
+            </div>
+        </div>
+
         <div id="mainContent">
             <div class="loading">
                 <div class="spinner"></div>
@@ -479,6 +808,7 @@
         let sessionData = null;
         let selectedContacts = new Set();
         let selectedFile = null;
+        let currentMessageType = 'text';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -506,12 +836,55 @@
                 }
             });
             
+            socket.on('session_authenticated', function(data) {
+                if (data.sessionId == sessionId) {
+                    updateSessionStatus('authenticated');
+                }
+            });
+            
+            socket.on('session_ready', function(data) {
+                if (data.sessionId == sessionId) {
+                    updateSessionStatus('connected');
+                }
+            });
+            
+            socket.on('session_auth_failure', function(data) {
+                if (data.sessionId == sessionId) {
+                    updateSessionStatus('auth_failure');
+                    showError('فشل في التحقق من الهوية: ' + (data.error || 'خطأ غير معروف'));
+                }
+            });
+            
+            socket.on('session_loading', function(data) {
+                if (data.sessionId == sessionId) {
+                    updateSessionStatus('loading');
+                }
+            });
+            
             socket.on('message_sent', function(data) {
-                showMessageStatus('Message sent successfully!', 'success');
+                showMessageStatus('تم إرسال الرسالة بنجاح!', 'success');
+            });
+            
+            socket.on('bulk_message_sent', function(data) {
+                const successCount = data.results.filter(r => r.success).length;
+                const totalCount = data.results.length;
+                showMessageStatus(`تم إرسال الرسالة إلى ${successCount} من ${totalCount} مستلم بنجاح!`, 'success');
+            });
+            
+            socket.on('file_sent', function(data) {
+                const successCount = data.results.filter(r => r.success).length;
+                const totalCount = data.results.length;
+                showMessageStatus(`تم إرسال الملف إلى ${successCount} من ${totalCount} مستلم بنجاح!`, 'success');
+            });
+            
+            socket.on('location_sent', function(data) {
+                const successCount = data.results.filter(r => r.success).length;
+                const totalCount = data.results.length;
+                showMessageStatus(`تم إرسال الموقع إلى ${successCount} من ${totalCount} مستلم بنجاح!`, 'success');
             });
             
             socket.on('message_error', function(data) {
-                showMessageStatus('Error sending message: ' + data.error, 'error');
+                showMessageStatus('خطأ في إرسال الرسالة: ' + data.error, 'error');
             });
             
             socket.on('session_error', function(data) {
@@ -758,43 +1131,6 @@
                         </div>
                     </div>
                     
-                    <div class="messaging-section">
-                        <div class="section-header">
-                            <h3>Send Message</h3>
-                            <p>Send a message to selected contacts</p>
-                        </div>
-                        
-                        <div class="messaging-form">
-                            <div class="form-group">
-                                <label>Selected Contacts:</label>
-                                <div class="selected-contacts empty" id="selectedContacts">
-                                    No contacts selected
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="messageText">Message:</label>
-                                <textarea id="messageText" placeholder="Type your message here..."></textarea>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="fileInput">File (Optional):</label>
-                                <input type="file" id="fileInput" accept="image/*,video/*,audio/*,application/*" onchange="handleFileSelect()">
-                                <small class="file-info" id="fileInfo"></small>
-                            </div>
-                            
-                            <div class="message-status" id="messageStatus"></div>
-                            
-                            <div class="button-group">
-                                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn" disabled>
-                                    Send Message
-                                </button>
-                                <button class="btn btn-secondary" onclick="sendFile()" id="sendFileBtn" disabled>
-                                    Send File Only
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             `;
         }
@@ -810,11 +1146,11 @@
                 <div class="contact-item">
                     <input type="checkbox" class="contact-checkbox" 
                            value="${contact.id}" 
-                           onchange="toggleContact('${contact.id}', '${contact.name || contact.number}')">
+                           onchange="toggleContactSelection('${contact.id}')">
                     <div class="contact-info">
-                        <div class="contact-name">${contact.name || contact.number}</div>
+                        <div class="contact-name">${contact.name || contact.number || contact.id}</div>
                         <div class="contact-details">
-                            ${contact.number ? contact.number : ''}
+                            ${contact.number ? contact.number : contact.id}
                             <span class="contact-type">${contact.type || 'contact'}</span>
                         </div>
                     </div>
@@ -847,6 +1183,16 @@
             
             updateSelectedContactsDisplay();
             updateSendButton();
+        }
+        
+        function toggleContactSelection(contactId) {
+            if (selectedContacts.has(contactId)) {
+                selectedContacts.delete(contactId);
+            } else {
+                selectedContacts.add(contactId);
+            }
+            
+            updateSelectedContacts();
         }
 
         function updateSelectedContactsDisplay() {
@@ -1014,6 +1360,211 @@
                 updateSendButton();
             }
         });
+        
+        // New message type functions
+        function setMessageType(type) {
+            currentMessageType = type;
+            
+            // Update button states
+            document.querySelectorAll('.message-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update form
+            updateMessageForm();
+        }
+        
+        function updateMessageForm() {
+            // Hide all forms
+            document.getElementById('textMessageForm').style.display = 'none';
+            document.getElementById('fileMessageForm').style.display = 'none';
+            document.getElementById('locationMessageForm').style.display = 'none';
+            
+            // Show appropriate form based on currentMessageType
+            if (currentMessageType === 'text') {
+                document.getElementById('textMessageForm').style.display = 'block';
+            } else if (['image', 'document', 'audio', 'video'].includes(currentMessageType)) {
+                document.getElementById('fileMessageForm').style.display = 'block';
+            } else if (currentMessageType === 'location') {
+                document.getElementById('locationMessageForm').style.display = 'block';
+            }
+        }
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                showFilePreview(file);
+            }
+        }
+        
+        function showFilePreview(file) {
+            const preview = document.getElementById('filePreview');
+            preview.style.display = 'block';
+            
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                preview.innerHTML = '';
+                preview.appendChild(img);
+            } else {
+                preview.innerHTML = `
+                    <div>
+                        <strong>${file.name}</strong><br>
+                        <small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                    </div>
+                `;
+            }
+        }
+        
+        function selectAllContacts() {
+            if (sessionData && sessionData.contacts) {
+                sessionData.contacts.forEach(contact => {
+                    selectedContacts.add(contact.id);
+                });
+                updateSelectedContacts();
+            }
+        }
+        
+        function deselectAllContacts() {
+            selectedContacts.clear();
+            updateSelectedContacts();
+        }
+        
+        function updateSelectedContacts() {
+            const container = document.getElementById('selectedContacts');
+            const count = document.getElementById('selectedCount');
+            
+            if (selectedContacts.size === 0) {
+                container.innerHTML = 'لم يتم اختيار أي مستلم';
+                container.className = 'selected-contacts empty';
+                if (count) count.style.display = 'none';
+            } else {
+                container.innerHTML = `تم اختيار ${selectedContacts.size} مستلم`;
+                container.className = 'selected-contacts';
+                if (count) {
+                    count.textContent = selectedContacts.size;
+                    count.style.display = 'inline-block';
+                }
+            }
+        }
+        
+        function sendBulkMessage() {
+            if (selectedContacts.size === 0) {
+                alert('يرجى اختيار مستلمين أولاً');
+                return;
+            }
+            
+            const messageText = document.getElementById('messageText').value.trim();
+            if (!messageText) {
+                alert('يرجى كتابة رسالة');
+                return;
+            }
+            
+            if (confirm(`هل أنت متأكد من إرسال الرسالة إلى ${selectedContacts.size} مستلم؟`)) {
+                // Send bulk message
+                if (socket) {
+                    socket.emit('send_bulk_message', {
+                        sessionId: sessionId,
+                        contacts: Array.from(selectedContacts),
+                        message: messageText
+                    });
+                }
+            }
+        }
+        
+        // Update form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageForm = document.getElementById('messageForm');
+            if (messageForm) {
+                messageForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    if (selectedContacts.size === 0) {
+                        alert('يرجى اختيار مستلمين أولاً');
+                        return;
+                    }
+                    
+                    if (currentMessageType === 'text') {
+                        const messageText = document.getElementById('messageText').value.trim();
+                        if (!messageText) {
+                            alert('يرجى كتابة رسالة');
+                            return;
+                        }
+                        
+                        if (socket) {
+                            socket.emit('send_bulk_message', {
+                                sessionId: sessionId,
+                                contacts: Array.from(selectedContacts),
+                                message: messageText
+                            });
+                            showMessageStatus('جاري إرسال الرسالة...', 'success');
+                        }
+                    } else if (['image', 'document', 'audio', 'video'].includes(currentMessageType)) {
+                        if (!selectedFile) {
+                            alert('يرجى اختيار ملف');
+                            return;
+                        }
+                        
+                        // Send file
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const base64Data = e.target.result.split(',')[1];
+                            
+                            socket.emit('send_file', {
+                                sessionId: sessionId,
+                                contacts: Array.from(selectedContacts),
+                                fileData: base64Data,
+                                fileName: selectedFile.name,
+                                fileType: selectedFile.type,
+                                caption: document.getElementById('fileCaption').value.trim() || ''
+                            });
+                            showMessageStatus('جاري إرسال الملف...', 'success');
+                        };
+                        
+                        reader.readAsDataURL(selectedFile);
+                    } else if (currentMessageType === 'location') {
+                        const latitude = parseFloat(document.getElementById('latitude').value);
+                        const longitude = parseFloat(document.getElementById('longitude').value);
+                        const locationName = document.getElementById('locationName').value.trim();
+                        
+                        if (isNaN(latitude) || isNaN(longitude)) {
+                            alert('يرجى إدخال إحداثيات صحيحة');
+                            return;
+                        }
+                        
+                        if (socket) {
+                            socket.emit('send_location', {
+                                sessionId: sessionId,
+                                contacts: Array.from(selectedContacts),
+                                latitude: latitude,
+                                longitude: longitude,
+                                name: locationName
+                            });
+                            showMessageStatus('جاري إرسال الموقع...', 'success');
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Sidebar functions
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+        }
     </script>
 </body>
 </html>

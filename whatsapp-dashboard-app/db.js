@@ -264,6 +264,17 @@ try { db.prepare("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE").
 try { db.prepare("ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 1").run(); } catch (e) {}
 try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_hours INTEGER").run(); } catch (e) {}
 try { db.prepare("ALTER TABLE sessions ADD COLUMN expires_at DATETIME").run(); } catch (e) {}
+// إضافة عمود expires_at إذا لم يكن موجوداً
+try {
+    const columns = db.prepare("PRAGMA table_info(sessions)").all();
+    const hasExpiresAt = columns.some(col => col.name === 'expires_at');
+    if (!hasExpiresAt) {
+        db.prepare("ALTER TABLE sessions ADD COLUMN expires_at DATETIME").run();
+        console.log('تم إضافة عمود expires_at إلى جدول sessions');
+    }
+} catch (e) {
+    console.log('خطأ في إضافة عمود expires_at:', e.message);
+}
 
 // Switch TTL to days instead of hours
 try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_days INTEGER").run(); } catch (e) {}
