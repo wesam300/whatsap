@@ -13,10 +13,11 @@ const socketIo = require('socket.io');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia, Location } = require('whatsapp-web.js');
 const QRCode = require('qrcode');
 const cors = require('cors');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const { sendVerificationEmail, getServiceStatus } = require('./multi-email-service');
 const { router: apiRoutes, setActiveClientsRef } = require('./api-routes');
@@ -49,11 +50,48 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'X-Requested-With', 'x-api-key', 'x-session-token', 'Authorization', 'Accept'],
     exposedHeaders: ['Content-Type'],
     credentials: false,
-    maxAge: 86400
 };
+
+// Rate limiting configurations
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // limit each IP to 1000 requests per windowMs
+    message: { error: 'تم تجاوز الحد المسموح من الطلبات، يرجى المحاولة لاحقاً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // limit each IP to 500 API requests per windowMs
+    message: { error: 'تم تجاوز الحد المسموح من طلبات API، يرجى المحاولة لاحقاً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const messageLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // limit each IP to 60 messages per minute
+    message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة، يرجى المحاولة لاحقاً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const dailyMessageLimiter = rateLimit({
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    max: 10000, // limit each IP to 10000 messages per day
+    message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية، يرجى المحاولة غداً' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 
 // Global CORS
 app.use(cors(corsOptions));
+
+// Apply rate limiting
+app.use(generalLimiter);
+app.use('/api', apiLimiter);
 app.options('*', cors(corsOptions));
 
 app.use(express.json());
@@ -100,17 +138,96 @@ async function restartConnectedSessions() {
                 
                 activeClients.set(String(session.id), client);
                 
-                client.on('ready', () => {
-                    console.log(`الجلسة ${session.id} (${session.session_name}) جاهزة!`);
+                client.on('authenticated', () => {
+                    console.log(`الجلسة ${session.id} (${session.session_name}) تم التحقق من الهوية!`);
+                    
+                    // تحديث الحالة في قاعدة البيانات
+                    const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                    statusStmt.run('authenticated', session.id);
+                    
+                    // إرسال إشعار للواجهة
+                    io.emit('session_authenticated', { 
+                        sessionId: session.id, 
+                        sessionName: session.session_name 
+                    });
                 });
                 
-                client.on('disconnected', () => {
-                    console.log(`الجلسة ${session.id} (${session.session_name}) انفصلت`);
+                client.on('auth_failure', (msg) => {
+                    console.log(`فشل التحقق من الهوية للجلسة ${session.id} (${session.session_name}): ${msg}`);
+                    
+                    // تحديث الحالة في قاعدة البيانات
+                    const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                    statusStmt.run('auth_failure', session.id);
+                    
+                    // إرسال إشعار للواجهة
+                    io.emit('session_auth_failure', { 
+                        sessionId: session.id, 
+                        sessionName: session.session_name,
+                        error: msg 
+                    });
+                });
+                
+                client.on('qr', async (qr) => {
+                    console.log(`QR Code للجلسة ${session.id} (${session.session_name})`);
+                    
+                    try {
+                        const qrCodeDataURL = await QRCode.toDataURL(qr);
+                        
+                        // تحديث QR Code في قاعدة البيانات
+                        const qrStmt = db.prepare('UPDATE sessions SET qr_code = ? WHERE id = ?');
+                        qrStmt.run(qrCodeDataURL, session.id);
+                        
+                        // إرسال QR Code للواجهة
+                        io.emit('session_qr', { 
+                            sessionId: session.id, 
+                            sessionName: session.session_name,
+                            qrCode: qrCodeDataURL 
+                        });
+                    } catch (error) {
+                        console.error('خطأ في توليد QR Code:', error);
+                    }
+                });
+                
+                client.on('loading_screen', (percent, message) => {
+                    console.log(`تحميل الجلسة ${session.id} (${session.session_name}): ${percent}% - ${message}`);
+                    
+                    // إرسال تحديث التحميل للواجهة
+                    io.emit('session_loading', { 
+                        sessionId: session.id, 
+                        sessionName: session.session_name,
+                        percent: percent,
+                        message: message 
+                    });
+                });
+                
+                client.on('ready', async () => {
+                    console.log(`الجلسة ${session.id} (${session.session_name}) جاهزة!`);
+                    
+                    // تحديث الحالة في قاعدة البيانات
+                    const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                    statusStmt.run('connected', session.id);
+                    
+                    // إرسال إشعار للواجهة
+                    io.emit('session_connected', { 
+                        sessionId: session.id, 
+                        sessionName: session.session_name 
+                    });
+                });
+                
+                client.on('disconnected', (reason) => {
+                    console.log(`الجلسة ${session.id} (${session.session_name}) انفصلت - السبب: ${reason}`);
                     activeClients.delete(String(session.id));
                     
                     // تحديث الحالة في قاعدة البيانات
                     const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
                     statusStmt.run('disconnected', session.id);
+                    
+                    // إرسال إشعار للواجهة
+                    io.emit('session_disconnected', { 
+                        sessionId: session.id, 
+                        sessionName: session.session_name,
+                        reason: reason 
+                    });
                 });
                 
                 client.initialize();
@@ -160,11 +277,6 @@ app.get('/session/:id', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'session.html'));
 });
 
-// مسارات إدارة API
-app.get('/api-management', requireAuth, (req, res) => {
-    if (!ensureUserIsActive(req, res)) return;
-    res.sendFile(path.join(__dirname, 'public', 'api-management.html'));
-});
 
 app.get('/api-docs', requireAuth, (req, res) => {
     if (!ensureUserIsActive(req, res)) return;
@@ -222,6 +334,26 @@ app.get('/api/stats', requireAuth, (req, res) => {
         res.json({ success: true, stats: { totalSessions, connectedSessions, messages24h, api24h }});
     } catch (e) {
         res.status(500).json({ error: 'Failed to load stats' });
+    }
+});
+
+// إحصائيات عامة للأدمن
+app.get('/api/admin/stats', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const stats = {
+            totalUsers: db.prepare('SELECT COUNT(*) as count FROM users').get().count,
+            activeUsers: db.prepare('SELECT COUNT(*) as count FROM users WHERE is_active = 1').get().count,
+            totalSessions: db.prepare('SELECT COUNT(*) as count FROM sessions').get().count,
+            connectedSessions: db.prepare("SELECT COUNT(*) as count FROM sessions WHERE status = 'connected'").get().count,
+            totalMessages: db.prepare('SELECT COUNT(*) as count FROM messages').get().count,
+            messages24h: db.prepare("SELECT COUNT(*) as count FROM messages WHERE timestamp >= datetime('now','-1 day')").get().count,
+            apiCalls: db.prepare('SELECT COUNT(*) as count FROM api_logs').get().count,
+            api24h: db.prepare("SELECT COUNT(*) as count FROM api_logs WHERE created_at >= datetime('now','-1 day')").get().count
+        };
+        res.json({ success: true, stats });
+    } catch (error) {
+        console.error('Error getting admin stats:', error);
+        res.status(500).json({ success: false, error: 'فشل في جلب الإحصائيات' });
     }
 });
 
@@ -823,9 +955,14 @@ app.post('/api/sessions', requireAuth, async (req, res) => {
               .run(`+${days} days`, result.lastInsertRowid);
         }
         
-        res.json({ success: true, sessionId: result.lastInsertRowid });
+        res.json({ success: true, sessionId: result.lastInsertRowid, message: 'تم إنشاء الجلسة بنجاح' });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create session' });
+        console.error('Error creating session:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'فشل في إنشاء الجلسة',
+            details: error.message 
+        });
     }
 });
 
@@ -944,6 +1081,36 @@ io.on('connection', (socket) => {
                 }
             });
             
+            client.on('authenticated', () => {
+                console.log(`Session ${sessionId} authenticated!`);
+                
+                // Update status to authenticated
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('authenticated', sessionId);
+                
+                socket.emit('session_authenticated', { sessionId });
+            });
+            
+            client.on('auth_failure', (msg) => {
+                console.log(`Session ${sessionId} auth failure: ${msg}`);
+                
+                // Update status to auth_failure
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('auth_failure', sessionId);
+                
+                socket.emit('session_auth_failure', { sessionId, error: msg });
+            });
+            
+            client.on('loading_screen', (percent, message) => {
+                console.log(`Session ${sessionId} loading: ${percent}% - ${message}`);
+                
+                // Update status to loading
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('loading', sessionId);
+                
+                socket.emit('session_loading', { sessionId, percent, message });
+            });
+            
             client.on('ready', async () => {
                 console.log(`Session ${sessionId} is ready!`);
                 
@@ -978,14 +1145,60 @@ io.on('connection', (socket) => {
                 socket.emit('session_data', sessionData);
             });
             
-            client.on('disconnected', () => {
-                console.log(`Session ${sessionId} disconnected`);
+            // Add a fallback: if authenticated event is fired, also emit session_ready
+            client.on('authenticated', async () => {
+                console.log(`Session ${sessionId} authenticated - emitting session_ready as fallback`);
+                // Update status to connected
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('connected', sessionId);
+                socket.emit('session_ready', { sessionId });
+                
+                // Also try to get session data as fallback
+                try {
+                    // انتظار حتى يكون العميل جاهزاً تماماً
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // التحقق من أن العميل جاهز
+                    if (!client.info) {
+                        console.log(`Session ${sessionId} not ready yet, skipping data fetch`);
+                        return;
+                    }
+                    
+                    const chats = await client.getChats();
+                    const contacts = await client.getContacts();
+                    
+                    const sessionData = { 
+                        sessionId, 
+                        chats: chats.map(chat => ({
+                            id: chat.id._serialized,
+                            name: chat.name || chat.id.user,
+                            type: chat.isGroup ? 'group' : 'private'
+                        })),
+                        contacts: contacts.map(contact => ({
+                            id: contact.id._serialized,
+                            name: contact.pushname || contact.id.user,
+                            number: contact.id.user
+                        }))
+                    };
+                    
+                    // Save session data to database
+                    const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+                    sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
+                    
+                    socket.emit('session_data', sessionData);
+                } catch (error) {
+                    console.error('Error getting session data in authenticated fallback:', error);
+                }
+            });
+            
+            client.on('disconnected', (reason) => {
+                console.log(`Session ${sessionId} disconnected - Reason: ${reason}`);
                 
                 // Update status to disconnected
                 const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
                 statusStmt.run('disconnected', sessionId);
                 
-                socket.emit('session_disconnected', { sessionId });
+                socket.emit('session_disconnected', { sessionId, reason });
                 activeClients.delete(String(sessionId));
             });
             
@@ -1129,6 +1342,15 @@ io.on('connection', (socket) => {
             if (activeClients.has(String(sessionId))) {
                 const client = activeClients.get(String(sessionId));
                 
+                // التحقق من أن العميل جاهز
+                if (!client.info) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'الجلسة غير جاهزة بعد، يرجى المحاولة لاحقاً',
+                        code: 'SESSION_NOT_READY'
+                    });
+                }
+                
                 // Get contacts and chats
                 const chats = await client.getChats();
                 const contacts = await client.getContacts();
@@ -1237,6 +1459,45 @@ io.on('connection', (socket) => {
         }
     });
     
+    socket.on('send_bulk_message', async (data) => {
+        try {
+            const { sessionId, contacts, message } = data;
+            
+            // Check if session exists and is connected
+            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
+            const session = stmt.get(sessionId);
+            
+            if (!session) {
+                socket.emit('message_error', { error: 'Session not found' });
+                return;
+            }
+            
+            const client = activeClients.get(String(sessionId));
+            if (!client) {
+                socket.emit('message_error', { error: 'Session not active' });
+                return;
+            }
+            
+            // Send message to all selected contacts
+            const results = [];
+            for (const contactId of contacts) {
+                try {
+                    const chatId = contactId.includes('@c.us') ? contactId : `${contactId}@c.us`;
+                    await client.sendMessage(chatId, message);
+                    results.push({ contactId, success: true });
+                } catch (error) {
+                    results.push({ contactId, success: false, error: error.message });
+                }
+            }
+            
+            socket.emit('bulk_message_sent', { results });
+            
+        } catch (error) {
+            console.error('Send bulk message error:', error);
+            socket.emit('message_error', { error: 'Failed to send bulk message: ' + error.message });
+        }
+    });
+    
     socket.on('send_file', async (data) => {
         try {
             const { sessionId, contacts, fileData, fileName, fileType, caption } = data;
@@ -1316,6 +1577,45 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('Send file error:', error);
             socket.emit('file_error', { error: 'Failed to send file: ' + error.message });
+        }
+    });
+    
+    socket.on('send_location', async (data) => {
+        try {
+            const { sessionId, contacts, latitude, longitude, name } = data;
+            
+            // Check if session exists and is connected
+            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
+            const session = stmt.get(sessionId);
+            
+            if (!session) {
+                socket.emit('message_error', { error: 'Session not found' });
+                return;
+            }
+            
+            const client = activeClients.get(String(sessionId));
+            if (!client) {
+                socket.emit('message_error', { error: 'Session not active' });
+                return;
+            }
+            
+            // Send location to all selected contacts
+            const results = [];
+            for (const contactId of contacts) {
+                try {
+                    const chatId = contactId.includes('@c.us') ? contactId : `${contactId}@c.us`;
+                    await client.sendMessage(chatId, new Location(latitude, longitude, name || ''));
+                    results.push({ contactId, success: true });
+                } catch (error) {
+                    results.push({ contactId, success: false, error: error.message });
+                }
+            }
+            
+            socket.emit('location_sent', { results });
+            
+        } catch (error) {
+            console.error('Send location error:', error);
+            socket.emit('message_error', { error: 'Failed to send location: ' + error.message });
         }
     });
     
