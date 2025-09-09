@@ -1724,6 +1724,9 @@ io.on('connection', (socket) => {
                         String(receiver)                      // receiver
                     ];
                     
+                    // Debug logging
+                    console.log('Saving message with values:', safeValues.map((v, i) => `${i}: ${typeof v} = ${v}`).join(', '));
+                    
                     insert.run(...safeValues);
                 } catch (e) {
                     console.error('فشل في حفظ الرسالة الواردة:', e.message);
