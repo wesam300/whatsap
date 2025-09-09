@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Dashboard - Login</title>
+    <title>واتساب داشبورد - تسجيل الدخول</title>
     <style>
         * {
             margin: 0;
@@ -11,8 +11,37 @@
             box-sizing: border-box;
         }
 
+        /* دعم كامل للعربية */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            direction: rtl;
+            text-align: right;
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+        }
+
+        .ltr {
+            direction: ltr;
+            text-align: left;
+        }
+
+        .language-toggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .language-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -150,65 +179,70 @@
     </style>
 </head>
 <body>
+    <button class="language-toggle" onclick="toggleLanguage()" id="languageToggle">English</button>
+    
     <div class="container">
         <div class="header">
-            <h1>WhatsApp Dashboard</h1>
-            <p>Manage multiple WhatsApp sessions</p>
+            <h1 data-translate="title">واتساب داشبورد</h1>
+            <p data-translate="subtitle">منصة إدارة واتساب المتقدمة</p>
         </div>
 
         <!-- Login Form -->
         <div class="form-container" id="loginForm">
-            <h2 style="text-align: center; margin-bottom: 30px; color: #333;">Login</h2>
+            <h2 style="text-align: center; margin-bottom: 30px; color: #333;" data-translate="loginTitle">تسجيل الدخول</h2>
             
             <div class="error-message" id="loginError"></div>
             
             <div class="form-group">
-                <label for="loginUsername">Username</label>
-                <input type="text" id="loginUsername" placeholder="Enter your username">
+                <label for="loginUsername" data-translate="email">البريد الإلكتروني</label>
+                <input type="text" id="loginUsername" data-placeholder="email" placeholder="أدخل بريدك الإلكتروني">
             </div>
             
             <div class="form-group">
-                <label for="loginPassword">Password</label>
-                <input type="password" id="loginPassword" placeholder="Enter your password">
+                <label for="loginPassword" data-translate="password">كلمة المرور</label>
+                <input type="password" id="loginPassword" data-placeholder="password" placeholder="أدخل كلمة المرور">
             </div>
             
-            <button class="btn btn-primary" onclick="login()">Login</button>
+            <button class="btn btn-primary" onclick="login()" data-translate="login">تسجيل الدخول</button>
             
             <div class="toggle-form">
-                <a href="register.html" style="color: #25D366; text-decoration: none; font-size: 14px;">ليس لديك حساب؟ سجل الآن</a>
+                <a href="register.html" style="color: #25D366; text-decoration: none; font-size: 14px;" data-translate="noAccount">ليس لديك حساب؟</a>
+                <span data-translate="register">إنشاء حساب جديد</span>
             </div>
         </div>
 
         <!-- Registration Form -->
         <div class="form-container hidden" id="registerForm">
-            <h2 style="text-align: center; margin-bottom: 30px; color: #333;">Register</h2>
+            <h2 style="text-align: center; margin-bottom: 30px; color: #333;" data-translate="registerTitle">إنشاء حساب جديد</h2>
             
             <div class="error-message" id="registerError"></div>
             <div class="success-message" id="registerSuccess"></div>
             
             <div class="form-group">
-                <label for="registerUsername">Username</label>
-                <input type="text" id="registerUsername" placeholder="Choose a username">
+                <label for="registerUsername" data-translate="fullName">الاسم الكامل</label>
+                <input type="text" id="registerUsername" data-placeholder="fullName" placeholder="أدخل اسمك الكامل">
             </div>
             
             <div class="form-group">
-                <label for="registerPassword">Password</label>
-                <input type="password" id="registerPassword" placeholder="Choose a password">
+                <label for="registerPassword" data-translate="password">كلمة المرور</label>
+                <input type="password" id="registerPassword" data-placeholder="password" placeholder="اختر كلمة مرور">
             </div>
             
             <div class="form-group">
-                <label for="confirmPassword">Confirm Password</label>
-                <input type="password" id="confirmPassword" placeholder="Confirm your password">
+                <label for="confirmPassword" data-translate="confirmPassword">تأكيد كلمة المرور</label>
+                <input type="password" id="confirmPassword" data-placeholder="confirmPassword" placeholder="أكد كلمة المرور">
             </div>
             
-            <button class="btn btn-primary" onclick="register()">Register</button>
+            <button class="btn btn-primary" onclick="register()" data-translate="register">إنشاء الحساب</button>
             
             <div class="toggle-form">
-                <button onclick="toggleForm()">Already have an account? Login</button>
+                <button onclick="toggleForm()" data-translate="haveAccount">لديك حساب بالفعل؟</button>
+                <span data-translate="loginLink">تسجيل الدخول</span>
             </div>
         </div>
     </div>
 
+    <script src="translations.js"></script>
     <script>
         function toggleForm() {
             const loginForm = document.getElementById('loginForm');

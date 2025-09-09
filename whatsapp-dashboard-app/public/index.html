@@ -3,12 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Dashboard - إدارة جلسات WhatsApp المتعددة</title>
+    <title>واتساب داشبورد - إدارة جلسات واتساب المتعددة</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="css/unified-design.css" rel="stylesheet">
     <style>
+        /* دعم كامل للعربية */
+        body {
+            direction: rtl;
+            text-align: right;
+            font-family: 'Inter', 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+        }
+
+        .ltr {
+            direction: ltr;
+            text-align: left;
+        }
+
+        .language-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(37, 211, 102, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .language-toggle:hover {
+            background: rgba(37, 211, 102, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
         :root {
             --primary-color: #25D366;
             --primary-dark: #128C7E;
@@ -332,25 +367,27 @@
     </style>
 </head>
 <body>
+    <button class="language-toggle" onclick="toggleLanguage()" id="languageToggle">English</button>
+    
     <!-- Header -->
     <header class="header">
         <div class="header-content">
             <div class="container">
                 <div class="logo animate-fade-in-up">
                     <i class="fab fa-whatsapp"></i>
-                    WhatsApp Dashboard
+                    <span data-translate="title">واتساب داشبورد</span>
                 </div>
-                <p class="tagline animate-fade-in-up delay-1">
-                    إدارة جلسات WhatsApp المتعددة بسهولة وأمان
+                <p class="tagline animate-fade-in-up delay-1" data-translate="subtitle">
+                    منصة إدارة واتساب المتقدمة
                 </p>
                 <div class="cta-buttons animate-fade-in-up delay-2">
                     <a href="login.html" class="btn btn-primary">
                         <i class="fas fa-sign-in-alt"></i>
-                        تسجيل الدخول
+                        <span data-translate="login">تسجيل الدخول</span>
                     </a>
                     <a href="register.html" class="btn btn-outline">
                         <i class="fas fa-user-plus"></i>
-                        إنشاء حساب جديد
+                        <span data-translate="register">إنشاء حساب جديد</span>
                     </a>
                 </div>
             </div>
@@ -360,14 +397,14 @@
     <!-- Features Section -->
     <section class="features">
         <div class="container">
-            <h2 class="section-title animate-fade-in-up">مميزات الخدمة</h2>
+            <h2 class="section-title animate-fade-in-up" data-translate="features">المميزات</h2>
             <div class="features-grid">
                 <div class="feature-card animate-fade-in-up delay-1">
                     <div class="feature-icon">
                         <i class="fas fa-mobile-alt"></i>
                     </div>
-                    <h3 class="feature-title">إدارة متعددة للجلسات</h3>
-                    <p class="feature-description">
+                    <h3 class="feature-title" data-translate="feature1">إدارة جلسات متعددة</h3>
+                    <p class="feature-description" data-translate="feature1">
                         إدارة عدة جلسات WhatsApp في نفس الوقت مع واجهة سهلة الاستخدام
                     </p>
                 </div>
@@ -375,8 +412,8 @@
                     <div class="feature-icon">
                         <i class="fas fa-shield-alt"></i>
                     </div>
-                    <h3 class="feature-title">أمان عالي</h3>
-                    <p class="feature-description">
+                    <h3 class="feature-title" data-translate="feature3">أمان عالي</h3>
+                    <p class="feature-description" data-translate="feature3">
                         حماية متقدمة لبياناتك وجلساتك مع تشفير آمن
                     </p>
                 </div>
@@ -384,18 +421,18 @@
                     <div class="feature-icon">
                         <i class="fas fa-code"></i>
                     </div>
-                    <h3 class="feature-title">API متقدم</h3>
-                    <p class="feature-description">
-                        واجهة برمجة تطبيقات قوية لإرسال الرسائل والتفاعل مع WhatsApp
+                    <h3 class="feature-title" data-translate="feature2">واجهة سهلة الاستخدام</h3>
+                    <p class="feature-description" data-translate="feature2">
+                        واجهة برمجة تطبيقات قوية لإرسال الرسائل والتفاعل مع واتساب
                     </p>
                 </div>
                 <div class="feature-card animate-fade-in-up delay-4">
                     <div class="feature-icon">
                         <i class="fas fa-chart-line"></i>
                     </div>
-                    <h3 class="feature-title">إحصائيات مفصلة</h3>
-                    <p class="feature-description">
-                        تتبع أداء جلساتك وإحصائيات الاستخدام في الوقت الفعلي
+                    <h3 class="feature-title" data-translate="feature4">دعم كامل للعربية</h3>
+                    <p class="feature-description" data-translate="feature4">
+                        واجهة باللغة العربية مع دعم كامل للنصوص والاتجاه
                     </p>
                 </div>
                 <div class="feature-card animate-fade-in-up delay-1">
@@ -473,6 +510,7 @@
         </div>
     </footer>
 
+    <script src="translations.js"></script>
     <script>
         // Add animation classes when elements come into view
         const observerOptions = {

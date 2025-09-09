@@ -21,6 +21,10 @@ db.exec(`
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         email_verified BOOLEAN DEFAULT FALSE,
+        is_admin BOOLEAN DEFAULT FALSE,
+        is_active BOOLEAN DEFAULT TRUE,
+        max_sessions INTEGER DEFAULT 5,
+        session_ttl_days INTEGER DEFAULT 30,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -40,6 +44,11 @@ db.exec(`
         status TEXT DEFAULT 'disconnected',
         qr_code TEXT,
         session_data TEXT,
+        expires_at DATETIME,
+        max_days INTEGER DEFAULT 30,
+        days_remaining INTEGER DEFAULT 30,
+        is_paused BOOLEAN DEFAULT FALSE,
+        pause_reason TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -127,6 +136,55 @@ db.exec(`
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `).run();
+
+    // إضافة الأعمدة المفقودة للقاعدة الموجودة (Migration)
+    try {
+        // إضافة أعمدة المستخدمين المفقودة
+        db.prepare('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 5').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN session_ttl_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة عمود انتهاء الصلاحية للجلسات
+        db.prepare('ALTER TABLE sessions ADD COLUMN expires_at DATETIME').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة أعمدة الإعدادات العامة
+        db.prepare('ALTER TABLE settings ADD COLUMN default_max_sessions INTEGER DEFAULT 5').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE settings ADD COLUMN default_session_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة أعمدة التحكم في الجلسات
+        db.prepare('ALTER TABLE sessions ADD COLUMN max_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN days_remaining INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN is_paused BOOLEAN DEFAULT FALSE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN pause_reason TEXT').run();
+    } catch (e) { /* Column already exists */ }
 
     // إنشاء فهارس للبحث السريع
     db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)').run();

@@ -1,14 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Dashboard</title>
+    <title>لوحة تحكم واتساب</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        /* دعم كامل للعربية */
+        body {
+            direction: rtl;
+            text-align: right;
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+        }
+
+        .ltr {
+            direction: ltr;
+            text-align: left;
         }
         .admin-badge { background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; }
         .stats-cards { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 12px; margin-top: 15px; }
@@ -42,6 +54,21 @@
         .navbar h1::before {
             content: "📱";
             font-size: 28px;
+        }
+
+        .language-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .language-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .navbar .user-info {
@@ -569,19 +596,116 @@
                 width: 100%;
             }
         }
+
+        .text-danger {
+            color: #dc3545 !important;
+            font-weight: bold;
+        }
+
+        .text-warning {
+            color: #ffc107 !important;
+            font-weight: bold;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.show {
+            display: block;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            background: #25D366;
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .modal-header .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        .modal-header .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            text-align: left;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .detail-value {
+            color: #666;
+        }
     </style>
 </head>
 <body>
     <nav class="navbar">
         <div style="display: flex; align-items: center; gap: 15px;">
             <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-            <h1>WhatsApp Dashboard</h1>
+            <h1>لوحة تحكم واتساب</h1>
         </div>
         <div class="user-info">
-            <span class="username" id="username">User</span>
-            <span id="adminBadge" class="admin-badge" style="display:none;">ADMIN</span>
-            <a id="adminLink" href="/admin" class="logout-btn" style="text-decoration:none; display:none;">Admin</a>
-            <button class="logout-btn" onclick="logout()">Logout</button>
+            <button class="language-toggle" onclick="toggleLanguage()" id="languageToggle">English</button>
+            <span class="username" id="username">المستخدم</span>
+            <span id="adminBadge" class="admin-badge" style="display:none;">مدير</span>
+            <a id="adminLink" href="/admin" class="logout-btn" style="text-decoration:none; display:none;">الإدارة</a>
+            <button class="logout-btn" onclick="logout()">تسجيل الخروج</button>
         </div>
     </nav>
 
@@ -636,7 +760,25 @@
         <div id="sessionsContainer">
             <div class="loading">
                 <div class="spinner"></div>
-                <p>Loading sessions...</p>
+                <p>جاري تحميل الجلسات...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Details Modal -->
+    <div id="sessionDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>📊 تفاصيل الجلسة</h3>
+                <button class="close" onclick="closeModal('sessionDetailsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="sessionDetailsContent">
+                    <!-- سيتم ملؤها بـ JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('sessionDetailsModal')">إغلاق</button>
             </div>
         </div>
     </div>
@@ -646,6 +788,115 @@
     <script>
         let socket;
         let sessions = [];
+        let currentLanguage = 'ar'; // اللغة الافتراضية
+
+        // ترجمة النصوص
+        const translations = {
+            ar: {
+                title: 'لوحة تحكم واتساب',
+                user: 'المستخدم',
+                admin: 'مدير',
+                adminPanel: 'الإدارة',
+                logout: 'تسجيل الخروج',
+                english: 'English',
+                menu: 'القائمة',
+                home: 'الرئيسية',
+                apiTest: 'اختبار API',
+                apiDocs: 'وثائق API',
+                adminPanelSidebar: 'لوحة الأدمن',
+                createNewSession: 'إنشاء جلسة جديدة',
+                sessionName: 'اسم الجلسة',
+                sessionNamePlaceholder: 'مثال: واتساب شخصي، حساب العمل',
+                createSession: 'إنشاء جلسة',
+                systemTools: 'أدوات النظام',
+                loadingSessions: 'جاري تحميل الجلسات...',
+                noSessions: 'لا توجد جلسات بعد',
+                noSessionsDesc: 'أنشئ جلسة واتساب الأولى للبدء.',
+                errorLoading: 'خطأ في تحميل الجلسات',
+                errorLoadingDesc: 'فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.',
+                start: 'بدء',
+                stop: 'إيقاف',
+                openSession: 'فتح الجلسة',
+                renew: 'تمديد',
+                delete: 'حذف',
+                created: 'تاريخ الإنشاء:',
+                lastUpdated: 'آخر تحديث:',
+                expires: 'انتهاء الصلاحية:',
+                expired: 'منتهية',
+                daysRemaining: 'يوم متبقي',
+                confirmDelete: 'هل أنت متأكد من حذف هذه الجلسة؟ لا يمكن التراجع عن هذا الإجراء.',
+                confirmRenew: 'هل أنت متأكد من تمديد هذه الجلسة؟'
+            },
+            en: {
+                title: 'WhatsApp Dashboard',
+                user: 'User',
+                admin: 'ADMIN',
+                adminPanel: 'Admin',
+                logout: 'Logout',
+                english: 'العربية',
+                menu: 'Menu',
+                home: 'Home',
+                apiTest: 'API Test',
+                apiDocs: 'API Docs',
+                adminPanelSidebar: 'Admin Panel',
+                createNewSession: 'Create New Session',
+                sessionName: 'Session Name',
+                sessionNamePlaceholder: 'e.g., Personal WhatsApp, Work Account',
+                createSession: 'Create Session',
+                systemTools: 'System Tools',
+                loadingSessions: 'Loading sessions...',
+                noSessions: 'No Sessions Yet',
+                noSessionsDesc: 'Create your first WhatsApp session to get started.',
+                errorLoading: 'Error Loading Sessions',
+                errorLoadingDesc: 'Failed to load your WhatsApp sessions. Please try refreshing the page.',
+                start: 'Start',
+                stop: 'Stop',
+                openSession: 'Open Session',
+                renew: 'Renew',
+                delete: 'Delete',
+                created: 'Created:',
+                lastUpdated: 'Last Updated:',
+                expires: 'Expires:',
+                expired: 'Expired',
+                daysRemaining: 'days remaining',
+                confirmDelete: 'Are you sure you want to delete this session? This action cannot be undone.',
+                confirmRenew: 'Are you sure you want to renew this session?'
+            }
+        };
+
+        // وظيفة تبديل اللغة
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+            document.documentElement.lang = currentLanguage;
+            document.documentElement.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
+            updateLanguage();
+        }
+
+        // تحديث النصوص حسب اللغة
+        function updateLanguage() {
+            const t = translations[currentLanguage];
+            
+            // تحديث العنوان
+            document.querySelector('h1').textContent = t.title;
+            
+            // تحديث زر اللغة
+            document.getElementById('languageToggle').textContent = t.english;
+            
+            // تحديث القائمة الجانبية
+            document.querySelector('.sidebar-header h3').textContent = t.menu;
+            document.querySelector('a[href="/dashboard"]').innerHTML = `<span class="icon">🏠</span>${t.home}`;
+            document.querySelector('a[href="/api-test"]').innerHTML = `<span class="icon">🧪</span>${t.apiTest}`;
+            document.querySelector('a[href="/api-docs"]').innerHTML = `<span class="icon">📚</span>${t.apiDocs}`;
+            document.querySelector('a[href="/admin"]').innerHTML = `<span class="icon">⚙️</span>${t.adminPanelSidebar}`;
+            
+            // تحديث النصوص الأخرى
+            document.querySelector('.username').textContent = t.user;
+            document.querySelector('.logout-btn').textContent = t.logout;
+            document.querySelector('a[href="/admin"]').textContent = t.adminPanel;
+            
+            // إعادة عرض الجلسات
+            renderSessions();
+        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -777,6 +1028,7 @@
                 if (response.ok) {
                     sessions = await response.json();
                     renderSessions();
+                    checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
                 } else {
                     throw new Error('Failed to load sessions');
                 }
@@ -784,11 +1036,27 @@
                 console.error('Error loading sessions:', error);
                 document.getElementById('sessionsContainer').innerHTML = `
                     <div class="empty-state">
-                        <h3>Error Loading Sessions</h3>
-                        <p>Failed to load your WhatsApp sessions. Please try refreshing the page.</p>
+                        <h3>خطأ في تحميل الجلسات</h3>
+                        <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
                     </div>
                 `;
             }
+        }
+
+        function checkExpiryWarnings() {
+            const now = new Date();
+            sessions.forEach(session => {
+                if (session.expires_at) {
+                    const expiresAt = new Date(session.expires_at);
+                    const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+                    
+                    if (daysRemaining <= 0) {
+                        notificationSystem.warning(`⚠️ الجلسة "${session.session_name}" منتهية الصلاحية!`);
+                    } else if (daysRemaining <= 3) {
+                        notificationSystem.warning(`⚠️ الجلسة "${session.session_name}" ستنتهي خلال ${daysRemaining} أيام`);
+                    }
+                }
+            });
         }
 
         async function createSession() {
@@ -842,12 +1110,13 @@
 
         function renderSessions() {
             const container = document.getElementById('sessionsContainer');
+            const t = translations[currentLanguage];
             
             if (sessions.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <h3>No Sessions Yet</h3>
-                        <p>Create your first WhatsApp session to get started.</p>
+                        <h3>${t.noSessions}</h3>
+                        <p>${t.noSessionsDesc}</p>
                     </div>
                 `;
                 return;
@@ -861,24 +1130,36 @@
         }
 
         function createSessionCard(session) {
+            const t = translations[currentLanguage];
             const statusClass = `status-${session.status}`;
             const statusText = session.status.replace('_', ' ').toUpperCase();
             
+            // حساب معلومات انتهاء الصلاحية
+            const now = new Date();
+            const expiresAt = session.expires_at ? new Date(session.expires_at) : null;
+            const isExpired = expiresAt && expiresAt < now;
+            const daysRemaining = expiresAt ? Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24)) : null;
+            
             let actionButtons = '';
             if (session.status === 'disconnected') {
-                actionButtons = `<button class="btn btn-success" onclick="startSession(${session.id})">Start</button>`;
+                actionButtons = `<button class="btn btn-success" onclick="startSession(${session.id})">${t.start}</button>`;
             } else if (session.status === 'waiting_for_qr') {
-                actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>`;
+                actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>`;
             } else if (session.status === 'connected') {
                 actionButtons = `
-                    <button class="btn btn-primary" onclick="viewSession(${session.id})">Open Session</button>
-                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>
+                    <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
+                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>
                 `;
             } else if (session.status === 'authenticated') {
                 actionButtons = `
-                    <button class="btn btn-primary" onclick="viewSession(${session.id})">Open Session</button>
-                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">Stop</button>
+                    <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
+                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>
                 `;
+            }
+            
+            // إضافة زر التمديد إذا لم تكن الجلسة منتهية
+            if (!isExpired && session.status !== 'expired' && session.status !== 'disconnected') {
+                actionButtons += `<button class="btn btn-warning" onclick="renewSession(${session.id})">🔄 ${t.renew}</button>`;
             }
             
             let qrSection = '';
@@ -900,20 +1181,32 @@
                     
                     <div class="session-actions">
                         ${actionButtons}
-                        <button class="btn btn-danger" onclick="deleteSession(${session.id})">Delete</button>
+                        <button class="btn btn-info" onclick="viewSessionDetails(${session.id})">
+                            📊 تفاصيل
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteSession(${session.id})">${t.delete}</button>
                     </div>
                     
                     ${qrSection}
                     
                     <div class="session-details">
                         <div class="detail-item">
-                            <span class="detail-label">Created:</span>
-                            <span class="detail-value">${new Date(session.created_at).toLocaleDateString()}</span>
+                            <span class="detail-label">${t.created}</span>
+                            <span class="detail-value">${new Date(session.created_at).toLocaleDateString(currentLanguage === 'ar' ? 'ar-SA' : 'en-US')}</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-label">Last Updated:</span>
-                            <span class="detail-value">${new Date(session.updated_at).toLocaleDateString()}</span>
+                            <span class="detail-label">${t.lastUpdated}</span>
+                            <span class="detail-value">${new Date(session.updated_at).toLocaleDateString(currentLanguage === 'ar' ? 'ar-SA' : 'en-US')}</span>
                         </div>
+                        ${expiresAt ? `
+                            <div class="detail-item">
+                                <span class="detail-label">${t.expires}</span>
+                                <span class="detail-value ${isExpired ? 'text-danger' : daysRemaining <= 3 ? 'text-warning' : ''}">
+                                    ${expiresAt.toLocaleDateString(currentLanguage === 'ar' ? 'ar-SA' : 'en-US')}
+                                    ${isExpired ? ` (${t.expired})` : daysRemaining !== null ? ` (${daysRemaining} ${t.daysRemaining})` : ''}
+                                </span>
+                            </div>
+                        ` : ''}
                     </div>
                     
                 </div>
@@ -935,8 +1228,33 @@
             }
         }
 
+        async function renewSession(sessionId) {
+            const t = translations[currentLanguage];
+            if (!confirm(t.confirmRenew)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/renew`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notificationSystem.success(data.message);
+                    await loadSessions(); // إعادة تحميل الجلسات
+                } else {
+                    notificationSystem.error(data.error || 'فشل في تمديد الجلسة');
+                }
+            } catch (error) {
+                console.error('Error renewing session:', error);
+                notificationSystem.error('فشل في تمديد الجلسة');
+            }
+        }
+
         async function deleteSession(sessionId) {
-            if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+            const t = translations[currentLanguage];
+            if (!confirm(t.confirmDelete)) {
                 return;
             }
             
@@ -1030,6 +1348,80 @@
                 createSession();
             }
         });
+
+        // عرض تفاصيل الجلسة
+        function viewSessionDetails(sessionId) {
+            const session = sessions.find(s => s.id === sessionId);
+            if (!session) return;
+
+            const now = new Date();
+            const expiresAt = session.expires_at ? new Date(session.expires_at) : null;
+            const isExpired = expiresAt && expiresAt < now;
+            const daysRemaining = session.days_remaining || 0;
+
+            const content = `
+                <div class="detail-item">
+                    <span class="detail-label">اسم الجلسة:</span>
+                    <span class="detail-value">${session.session_name}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">معرف الجلسة:</span>
+                    <span class="detail-value">${session.id}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">الحالة:</span>
+                    <span class="detail-value">${session.status}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">تاريخ الإنشاء:</span>
+                    <span class="detail-value">${new Date(session.created_at).toLocaleDateString('ar-SA')}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">آخر تحديث:</span>
+                    <span class="detail-value">${new Date(session.updated_at).toLocaleDateString('ar-SA')}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">انتهاء الصلاحية:</span>
+                    <span class="detail-value ${isExpired ? 'text-danger' : ''}">
+                        ${expiresAt ? expiresAt.toLocaleDateString('ar-SA') : 'غير محدد'}
+                    </span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">الأيام المتبقية:</span>
+                    <span class="detail-value ${daysRemaining <= 3 ? 'text-warning' : ''}">
+                        ${daysRemaining} يوم
+                    </span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">الحد الأقصى للأيام:</span>
+                    <span class="detail-value">${session.max_days || 30} يوم</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">حالة الإيقاف:</span>
+                    <span class="detail-value">${session.is_paused ? '⏸️ معلقة' : '▶️ نشطة'}</span>
+                </div>
+                ${session.pause_reason ? `
+                <div class="detail-item">
+                    <span class="detail-label">سبب الإيقاف:</span>
+                    <span class="detail-value">${session.pause_reason}</span>
+                </div>
+                ` : ''}
+            `;
+
+            document.getElementById('sessionDetailsContent').innerHTML = content;
+            
+            // إظهار Modal
+            const modal = document.getElementById('sessionDetailsModal');
+            modal.style.display = 'block';
+            modal.classList.add('show');
+        }
+
+        // إغلاق Modal
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
     </script>
 </body>
 </html>

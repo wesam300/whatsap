@@ -422,6 +422,348 @@ app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
+// تحديث حدود الجلسات لمستخدم
+app.put('/api/admin/users/:userId/limits', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { maxSessions, sessionTtlDays } = req.body;
+
+        if (maxSessions !== undefined && (maxSessions < 1 || maxSessions > 100)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'عدد الجلسات المسموحة يجب أن يكون بين 1 و 100' 
+            });
+        }
+
+        if (sessionTtlDays !== undefined && (sessionTtlDays < 1 || sessionTtlDays > 365)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'عدد أيام انتهاء الجلسة يجب أن يكون بين 1 و 365' 
+            });
+        }
+
+        const updateFields = [];
+        const updateValues = [];
+
+        if (maxSessions !== undefined) {
+            updateFields.push('max_sessions = ?');
+            updateValues.push(Number(maxSessions));
+        }
+
+        if (sessionTtlDays !== undefined) {
+            updateFields.push('session_ttl_days = ?');
+            updateValues.push(Number(sessionTtlDays));
+        }
+
+        if (updateFields.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'لم يتم تحديد أي قيم للتحديث' 
+            });
+        }
+
+        updateValues.push(userId);
+        const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+        
+        const result = db.prepare(query).run(...updateValues);
+        
+        if (result.changes > 0) {
+            res.json({ success: true, message: 'تم تحديث حدود الجلسات بنجاح' });
+        } else {
+            res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+    } catch (error) {
+        console.error('Error updating user limits:', error);
+        res.status(500).json({ success: false, error: 'فشل في تحديث حدود الجلسات' });
+    }
+});
+
+// تحديث إعدادات الجلسة
+app.put('/api/admin/sessions/:sessionId/settings', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { maxDays, daysRemaining, isPaused, pauseReason } = req.body;
+        
+        if (maxDays < 1 || maxDays > 365) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'عدد الأيام يجب أن يكون بين 1 و 365' 
+            });
+        }
+        
+        if (daysRemaining < 0 || daysRemaining > maxDays) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'الأيام المتبقية يجب أن تكون بين 0 و ' + maxDays 
+            });
+        }
+        
+        // تحديث تاريخ الانتهاء بناءً على الأيام المتبقية
+        const newExpiryDate = new Date();
+        newExpiryDate.setDate(newExpiryDate.getDate() + daysRemaining);
+        
+        db.prepare(`
+            UPDATE sessions 
+            SET max_days = ?, days_remaining = ?, expires_at = ?, is_paused = ?, pause_reason = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `).run(maxDays, daysRemaining, newExpiryDate.toISOString(), isPaused ? 1 : 0, pauseReason, sessionId);
+        
+        res.json({ success: true, message: 'تم تحديث إعدادات الجلسة بنجاح' });
+    } catch (error) {
+        console.error('Error updating session settings:', error);
+        res.status(500).json({ success: false, error: 'فشل في تحديث إعدادات الجلسة' });
+    }
+});
+
+// تمديد الجلسة (للمدير)
+app.post('/api/admin/sessions/:sessionId/extend', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { days } = req.body;
+        
+        if (days < 1 || days > 365) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'عدد الأيام يجب أن يكون بين 1 و 365' 
+            });
+        }
+        
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+        
+        const newDaysRemaining = (session.days_remaining || 0) + days;
+        const newExpiryDate = new Date();
+        newExpiryDate.setDate(newExpiryDate.getDate() + newDaysRemaining);
+        
+        db.prepare(`
+            UPDATE sessions 
+            SET days_remaining = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `).run(newDaysRemaining, newExpiryDate.toISOString(), sessionId);
+        
+        res.json({ 
+            success: true, 
+            message: `تم تمديد الجلسة بـ ${days} يوم`,
+            daysRemaining: newDaysRemaining,
+            expiresAt: newExpiryDate.toISOString()
+        });
+    } catch (error) {
+        console.error('Error extending session:', error);
+        res.status(500).json({ success: false, error: 'فشل في تمديد الجلسة' });
+    }
+});
+
+// إيقاف/تفعيل الجلسة
+app.post('/api/admin/sessions/:sessionId/toggle-pause', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { isPaused, pauseReason } = req.body;
+        
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+        
+        db.prepare(`
+            UPDATE sessions 
+            SET is_paused = ?, pause_reason = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `).run(isPaused ? 1 : 0, pauseReason, sessionId);
+        
+        res.json({ 
+            success: true, 
+            message: isPaused ? 'تم إيقاف الجلسة' : 'تم تفعيل الجلسة',
+            isPaused: isPaused
+        });
+    } catch (error) {
+        console.error('Error toggling session pause:', error);
+        res.status(500).json({ success: false, error: 'فشل في تغيير حالة الجلسة' });
+    }
+});
+
+// الحصول على جميع الجلسات (للأدمن)
+app.get('/api/admin/sessions', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const rows = db.prepare(`
+            SELECT s.*, u.username, u.email, u.max_sessions, u.session_ttl_days,
+                   CASE 
+                       WHEN s.expires_at IS NULL THEN 'unlimited'
+                       WHEN s.expires_at < CURRENT_TIMESTAMP THEN 'expired'
+                       ELSE 'active'
+                   END as expiry_status
+            FROM sessions s 
+            JOIN users u ON s.user_id = u.id 
+            ORDER BY s.created_at DESC
+        `).all();
+        res.json({ success: true, sessions: rows });
+    } catch (error) {
+        console.error('Error fetching sessions:', error);
+        res.status(500).json({ success: false, error: 'فشل في جلب الجلسات' });
+    }
+});
+
+// حذف جلسة (للأدمن)
+app.delete('/api/admin/sessions/:id', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const result = db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+        
+        if (result.changes > 0) {
+            res.json({ success: true, message: 'تم حذف الجلسة بنجاح' });
+        } else {
+            res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+    } catch (error) {
+        console.error('Error deleting session:', error);
+        res.status(500).json({ success: false, error: 'فشل في حذف الجلسة' });
+    }
+});
+
+// إعادة تشغيل جلسة (للأدمن)
+app.post('/api/admin/sessions/:id/restart', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        // إعادة تعيين حالة الجلسة
+        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('disconnected', sessionId);
+        res.json({ success: true, message: 'تم إعادة تعيين الجلسة' });
+    } catch (error) {
+        console.error('Error restarting session:', error);
+        res.status(500).json({ success: false, error: 'فشل في إعادة تشغيل الجلسة' });
+    }
+});
+
+// تمديد جلسة (للمستخدمين)
+app.post('/api/sessions/:id/renew', requireAuth, async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const userId = req.session.userId;
+        
+        // التحقق من أن الجلسة تخص المستخدم
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(sessionId, userId);
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+        
+        // الحصول على مدة الجلسة المسموحة للمستخدم
+        const user = db.prepare('SELECT session_ttl_days FROM users WHERE id = ?').get(userId);
+        const days = user && user.session_ttl_days != null ? Number(user.session_ttl_days) : 30;
+        
+        // تمديد الجلسة
+        const newExpiryDate = new Date();
+        newExpiryDate.setDate(newExpiryDate.getDate() + days);
+        
+        db.prepare('UPDATE sessions SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(newExpiryDate.toISOString(), sessionId);
+        
+        res.json({ 
+            success: true, 
+            message: `تم تمديد الجلسة لمدة ${days} يوم`,
+            newExpiryDate: newExpiryDate.toISOString()
+        });
+    } catch (error) {
+        console.error('Error renewing session:', error);
+        res.status(500).json({ success: false, error: 'فشل في تمديد الجلسة' });
+    }
+});
+
+// الحصول على معلومات انتهاء الصلاحية
+app.get('/api/sessions/:id/expiry', requireAuth, async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const userId = req.session.userId;
+        
+        const session = db.prepare(`
+            SELECT s.*, u.session_ttl_days 
+            FROM sessions s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE s.id = ? AND s.user_id = ?
+        `).get(sessionId, userId);
+        
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+        
+        const now = new Date();
+        const expiresAt = session.expires_at ? new Date(session.expires_at) : null;
+        const isExpired = expiresAt && expiresAt < now;
+        const daysRemaining = expiresAt ? Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24)) : null;
+        
+        res.json({
+            success: true,
+            session: {
+                id: session.id,
+                name: session.session_name,
+                status: session.status,
+                expiresAt: expiresAt ? expiresAt.toISOString() : null,
+                isExpired,
+                daysRemaining: isExpired ? 0 : daysRemaining,
+                canRenew: !isExpired && session.status !== 'expired'
+            }
+        });
+    } catch (error) {
+        console.error('Error getting session expiry:', error);
+        res.status(500).json({ success: false, error: 'فشل في جلب معلومات انتهاء الصلاحية' });
+    }
+});
+
+// إدارة الإعدادات العامة
+app.get('/api/admin/settings', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
+        res.json({ 
+            success: true, 
+            settings: settings || {
+                adminPhone: '',
+                defaultMaxSessions: 5,
+                defaultSessionDays: 30
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching settings:', error);
+        res.status(500).json({ success: false, error: 'فشل في جلب الإعدادات' });
+    }
+});
+
+app.put('/api/admin/settings', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { adminPhone, defaultMaxSessions, defaultSessionDays } = req.body;
+        
+        // تحديث أو إنشاء الإعدادات
+        db.prepare(`
+            INSERT OR REPLACE INTO settings (id, admin_phone, default_max_sessions, default_session_days, updated_at) 
+            VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(adminPhone, defaultMaxSessions, defaultSessionDays);
+        
+        res.json({ success: true, message: 'تم حفظ الإعدادات بنجاح' });
+    } catch (error) {
+        console.error('Error updating settings:', error);
+        res.status(500).json({ success: false, error: 'فشل في حفظ الإعدادات' });
+    }
+});
+
+// تنظيف الجلسات المنتهية الصلاحية
+app.post('/api/admin/cleanup-expired-sessions', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const result = db.prepare(`
+            UPDATE sessions 
+            SET status = 'expired' 
+            WHERE expires_at IS NOT NULL 
+            AND expires_at < CURRENT_TIMESTAMP 
+            AND status != 'expired'
+        `).run();
+        
+        res.json({ 
+            success: true, 
+            message: `تم تحديث ${result.changes} جلسة منتهية الصلاحية` 
+        });
+    } catch (error) {
+        console.error('Error cleaning up expired sessions:', error);
+        res.status(500).json({ success: false, error: 'فشل في تنظيف الجلسات المنتهية' });
+    }
+});
+
 // تحديث بيانات مستخدم
 app.put('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -1059,12 +1401,29 @@ app.post('/api/sessions', requireAuth, async (req, res) => {
         const stmt = db.prepare('INSERT INTO sessions (session_name, user_id) VALUES (?, ?)');
         const result = stmt.run(sessionName, userId);
 
+        // التحقق من حدود الجلسات المسموحة للمستخدم
+        const user = db.prepare('SELECT max_sessions, session_ttl_days FROM users WHERE id = ?').get(userId);
+        const maxSessions = user && user.max_sessions != null ? Number(user.max_sessions) : 5;
+        const days = user && user.session_ttl_days != null ? Number(user.session_ttl_days) : 30;
+        
+        // عد الجلسات النشطة للمستخدم
+        const activeSessions = db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = ? AND status != ?').get(userId, 'disconnected');
+        
+        if (activeSessions.count >= maxSessions) {
+            // حذف الجلسة التي تم إنشاؤها للتو
+            db.prepare('DELETE FROM sessions WHERE id = ?').run(result.lastInsertRowid);
+            return res.status(400).json({ 
+                success: false, 
+                error: `تم الوصول للحد الأقصى من الجلسات المسموحة (${maxSessions}). يرجى حذف جلسة أخرى أولاً.` 
+            });
+        }
+        
         // إعداد تاريخ الانتهاء للجلسة لو كان TTL محدد
-        const user = db.prepare('SELECT session_ttl_days FROM users WHERE id = ?').get(userId);
-        const days = user && user.session_ttl_days != null ? Number(user.session_ttl_days) : 5;
         if (days > 0) {
-            db.prepare('UPDATE sessions SET expires_at = datetime("now", ? ) WHERE id = ?')
-              .run(`+${days} days`, result.lastInsertRowid);
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + days);
+            db.prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
+              .run(expiryDate.toISOString(), result.lastInsertRowid);
         }
         
         res.json({ success: true, sessionId: result.lastInsertRowid, message: 'تم إنشاء الجلسة بنجاح' });
@@ -1082,7 +1441,16 @@ app.get('/api/sessions', requireAuth, (req, res) => {
     try {
         const userId = req.session.userId;
         if (!ensureUserIsActive(req, res)) return;
-        const stmt = db.prepare('SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC');
+        const stmt = db.prepare(`
+            SELECT s.*, 
+                   CASE 
+                       WHEN s.expires_at IS NOT NULL AND s.expires_at < datetime('now') THEN 'expired'
+                       ELSE s.status 
+                   END as status
+            FROM sessions s 
+            WHERE s.user_id = ? 
+            ORDER BY s.created_at DESC
+        `);
         const sessions = stmt.all(userId);
         
         res.json(sessions);
@@ -1335,21 +1703,30 @@ io.on('connection', (socket) => {
                             }
                         } catch (_) {}
                     }
-                    insert.run(
-                        String(sessionId),
-                        msg.from || (msg.to || ''),
-                        msg.id?._serialized || msg.id || `${Date.now()}-${Math.random()}`,
-                        !!msg.fromMe,
-                        msg.type || 'chat',
-                        msg.body || '',
-                        hasMedia,
-                        mediaMime,
-                        mediaBase64,
-                        msg.from || '',
-                        msg.to || ''
-                    );
+                    // Safely serialize object properties for SQLite binding
+                    const chatId = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
+                    const messageId = (typeof msg.id === 'object' && msg.id !== null) ? msg.id._serialized : (msg.id || `${Date.now()}-${Math.random()}`);
+                    const sender = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
+                    const receiver = (typeof msg.to === 'object' && msg.to !== null) ? msg.to._serialized : (msg.to || '');
+                    
+                    // Ensure all values are SQLite-compatible (numbers, strings, bigints, buffers, null)
+                    const safeValues = [
+                        String(sessionId),                    // session_id
+                        String(chatId),                       // chat_id
+                        String(messageId),                    // message_id
+                        msg.fromMe ? 1 : 0,                   // from_me (convert boolean to integer)
+                        String(msg.type || 'chat'),           // type
+                        String(msg.body || ''),               // body
+                        hasMedia ? 1 : 0,                     // has_media (convert boolean to integer)
+                        mediaMime ? String(mediaMime) : null, // media_mime_type
+                        mediaBase64 ? String(mediaBase64) : null, // media_base64
+                        String(sender),                       // sender
+                        String(receiver)                      // receiver
+                    ];
+                    
+                    insert.run(...safeValues);
                 } catch (e) {
-                    console.error('Failed to persist incoming message:', e.message);
+                    console.error('فشل في حفظ الرسالة الواردة:', e.message);
                 }
             });
 
@@ -1566,8 +1943,8 @@ io.on('connection', (socket) => {
             socket.emit('message_sent', { results });
             
         } catch (error) {
-            console.error('Send message error:', error);
-            socket.emit('message_error', { error: 'Failed to send message: ' + error.message });
+            console.error('خطأ في إرسال الرسالة:', error);
+            socket.emit('message_error', { error: 'فشل في إرسال الرسالة: ' + error.message });
         }
     });
     
@@ -1605,8 +1982,8 @@ io.on('connection', (socket) => {
             socket.emit('bulk_message_sent', { results });
             
         } catch (error) {
-            console.error('Send bulk message error:', error);
-            socket.emit('message_error', { error: 'Failed to send bulk message: ' + error.message });
+            console.error('خطأ في إرسال الرسائل الجماعية:', error);
+            socket.emit('message_error', { error: 'فشل في إرسال الرسائل الجماعية: ' + error.message });
         }
     });
     
@@ -1687,8 +2064,8 @@ io.on('connection', (socket) => {
             socket.emit('file_sent', { results });
             
         } catch (error) {
-            console.error('Send file error:', error);
-            socket.emit('file_error', { error: 'Failed to send file: ' + error.message });
+            console.error('خطأ في إرسال الملف:', error);
+            socket.emit('file_error', { error: 'فشل في إرسال الملف: ' + error.message });
         }
     });
     
@@ -1726,8 +2103,8 @@ io.on('connection', (socket) => {
             socket.emit('location_sent', { results });
             
         } catch (error) {
-            console.error('Send location error:', error);
-            socket.emit('message_error', { error: 'Failed to send location: ' + error.message });
+            console.error('خطأ في إرسال الموقع:', error);
+            socket.emit('message_error', { error: 'فشل في إرسال الموقع: ' + error.message });
         }
     });
     
@@ -1736,11 +2113,36 @@ io.on('connection', (socket) => {
     });
 });
 
+// تنظيف الجلسات المنتهية الصلاحية
+function cleanupExpiredSessions() {
+    try {
+        const result = db.prepare(`
+            UPDATE sessions 
+            SET status = 'expired' 
+            WHERE expires_at IS NOT NULL 
+            AND expires_at < CURRENT_TIMESTAMP 
+            AND status != 'expired'
+        `).run();
+        
+        if (result.changes > 0) {
+            console.log(`🧹 تم تنظيف ${result.changes} جلسة منتهية الصلاحية`);
+        }
+    } catch (error) {
+        console.error('خطأ في تنظيف الجلسات المنتهية:', error);
+    }
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
     
+    // تنظيف الجلسات المنتهية الصلاحية
+    cleanupExpiredSessions();
+    
     // إعادة تشغيل الجلسات المتصلة
     await restartConnectedSessions();
+    
+    // تنظيف الجلسات المنتهية كل ساعة
+    setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
 });
