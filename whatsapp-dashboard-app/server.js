@@ -387,8 +387,120 @@ function requireAdmin(req, res, next) {
 }
 
 app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-    const rows = db.prepare('SELECT id, username, email, is_active, is_admin, max_sessions, session_ttl_hours FROM users ORDER BY id DESC').all();
+    const rows = db.prepare('SELECT id, username, email, is_active, is_admin, max_sessions, session_ttl_days, created_at FROM users ORDER BY id DESC').all();
     res.json({ success: true, users: rows });
+});
+
+// إنشاء مستخدم جديد
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { username, email, password, maxSessions, sessionDays, isAdmin } = req.body;
+
+        if (!username || !email || !password) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم والبريد الإلكتروني وكلمة المرور مطلوبة' });
+        }
+
+        const exists = db.prepare('SELECT 1 FROM users WHERE username = ? OR email = ?').get(username, email);
+        if (exists) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم أو البريد الإلكتروني موجود مسبقاً' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        const insert = db.prepare('INSERT INTO users (username, email, password_hash, is_admin, is_active, max_sessions, session_ttl_days) VALUES (?, ?, ?, ?, 1, ?, ?)');
+        const result = insert.run(
+            username,
+            email,
+            passwordHash,
+            isAdmin ? 1 : 0,
+            Number.isFinite(Number(maxSessions)) ? Number(maxSessions) : 1,
+            Number.isFinite(Number(sessionDays)) ? Number(sessionDays) : 30
+        );
+        res.json({ success: true, userId: result.lastInsertRowid });
+    } catch (error) {
+        console.error('Error creating user (admin):', error);
+        res.status(500).json({ success: false, error: 'فشل في إنشاء المستخدم' });
+    }
+});
+
+// تحديث بيانات مستخدم
+app.put('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { username, email, password, maxSessions, sessionDays, isAdmin, isActive } = req.body;
+
+        if (!username || !email) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم والبريد الإلكتروني مطلوبان' });
+        }
+
+        // التأكد من عدم تعارض البريد/الاسم مع مستخدم آخر
+        const conflict = db.prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?').get(username, email, userId);
+        if (conflict) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم أو البريد الإلكتروني مستخدم من حساب آخر' });
+        }
+
+        if (password && password.length > 0) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, is_admin = ?, is_active = ?, max_sessions = ?, session_ttl_days = ? WHERE id = ?')
+              .run(
+                username,
+                email,
+                passwordHash,
+                isAdmin ? 1 : 0,
+                isActive ? 1 : 0,
+                Number.isFinite(Number(maxSessions)) ? Number(maxSessions) : null,
+                Number.isFinite(Number(sessionDays)) ? Number(sessionDays) : null,
+                userId
+              );
+        } else {
+            db.prepare('UPDATE users SET username = ?, email = ?, is_admin = ?, is_active = ?, max_sessions = ?, session_ttl_days = ? WHERE id = ?')
+              .run(
+                username,
+                email,
+                isAdmin ? 1 : 0,
+                isActive ? 1 : 0,
+                Number.isFinite(Number(maxSessions)) ? Number(maxSessions) : null,
+                Number.isFinite(Number(sessionDays)) ? Number(sessionDays) : null,
+                userId
+              );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating user (admin):', error);
+        res.status(500).json({ success: false, error: 'فشل في تحديث المستخدم' });
+    }
+});
+
+// تبديل حالة تفعيل المستخدم
+app.post('/api/admin/users/:userId/toggle', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { userId } = req.params;
+        const row = db.prepare('SELECT is_active FROM users WHERE id = ?').get(userId);
+        if (!row) return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        const newVal = row.is_active === 1 ? 0 : 1;
+        db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newVal, userId);
+        res.json({ success: true, isActive: newVal === 1 });
+    } catch (error) {
+        console.error('Error toggling user (admin):', error);
+        res.status(500).json({ success: false, error: 'فشل في تحديث الحالة' });
+    }
+});
+
+// حذف مستخدم
+app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, (req, res) => {
+    try {
+        const { userId } = req.params;
+        const del = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        // سيتم حذف الجلسات المرتبطة بسبب قيود العلاقات (ON DELETE CASCADE)
+        if (del.changes === 0) return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        // إلغاء تفعيل مفاتيح/توكنات API إن وجدت
+        try { db.prepare('UPDATE api_keys SET is_active = 0 WHERE user_id = ?').run(userId); } catch (_) {}
+        try { db.prepare('UPDATE session_tokens SET is_active = 0 WHERE user_id = ?').run(userId); } catch (_) {}
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting user (admin):', error);
+        res.status(500).json({ success: false, error: 'فشل في حذف المستخدم' });
+    }
 });
 
 app.post('/api/admin/users/:userId/active', requireAuth, requireAdmin, (req, res) => {
