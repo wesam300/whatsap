@@ -803,21 +803,6 @@
             </div>
         </div>
         
-        <!-- أدوات النظام -->
-        <div class="dashboard-actions" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e5e9;">
-            <h3 style="margin-bottom: 15px; color: #555;">أدوات النظام</h3>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <a href="/api-test" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
-                    🧪 اختبار API
-                </a>
-                <a href="/api-docs" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
-                    📚 وثائق API
-                </a>
-                <a id="adminButton" href="/admin" class="btn btn-secondary" style="text-decoration: none; display: none;">
-                    ⚙️ لوحة الأدمن
-                </a>
-            </div>
-        </div>
 
         <div id="sessionsContainer">
             <div class="loading">
@@ -870,7 +855,6 @@
                 sessionName: 'اسم الجلسة',
                 sessionNamePlaceholder: 'مثال: واتساب شخصي، حساب العمل',
                 createSession: 'إنشاء جلسة',
-                systemTools: 'أدوات النظام',
                 loadingSessions: 'جاري تحميل الجلسات...',
                 noSessions: 'لا توجد جلسات بعد',
                 noSessionsDesc: 'أنشئ جلسة واتساب الأولى للبدء.',
@@ -879,15 +863,13 @@
                 start: 'بدء',
                 stop: 'إيقاف',
                 openSession: 'فتح الجلسة',
-                renew: 'تمديد',
                 delete: 'حذف',
                 created: 'تاريخ الإنشاء:',
                 lastUpdated: 'آخر تحديث:',
                 expires: 'انتهاء الصلاحية:',
                 expired: 'منتهية',
                 daysRemaining: 'يوم متبقي',
-                confirmDelete: 'هل أنت متأكد من حذف هذه الجلسة؟ لا يمكن التراجع عن هذا الإجراء.',
-                confirmRenew: 'هل أنت متأكد من تمديد هذه الجلسة؟'
+                confirmDelete: 'هل أنت متأكد من حذف هذه الجلسة؟ لا يمكن التراجع عن هذا الإجراء.'
             },
             en: {
                 title: 'WhatsApp Dashboard',
@@ -905,7 +887,6 @@
                 sessionName: 'Session Name',
                 sessionNamePlaceholder: 'e.g., Personal WhatsApp, Work Account',
                 createSession: 'Create Session',
-                systemTools: 'System Tools',
                 loadingSessions: 'Loading sessions...',
                 noSessions: 'No Sessions Yet',
                 noSessionsDesc: 'Create your first WhatsApp session to get started.',
@@ -914,15 +895,13 @@
                 start: 'Start',
                 stop: 'Stop',
                 openSession: 'Open Session',
-                renew: 'Renew',
                 delete: 'Delete',
                 created: 'Created:',
                 lastUpdated: 'Last Updated:',
                 expires: 'Expires:',
                 expired: 'Expired',
                 daysRemaining: 'days remaining',
-                confirmDelete: 'Are you sure you want to delete this session? This action cannot be undone.',
-                confirmRenew: 'Are you sure you want to renew this session?'
+                confirmDelete: 'Are you sure you want to delete this session? This action cannot be undone.'
             }
         };
 
@@ -1018,7 +997,6 @@
                     if (me.user.isAdmin) {
                         document.getElementById('adminBadge').style.display = 'inline-block';
                         document.getElementById('adminLink').style.display = 'inline-block';
-                        document.getElementById('adminButton').style.display = 'inline-block';
                         document.getElementById('adminSidebarLink').style.display = 'block';
                     }
                     // Load stats
@@ -1219,10 +1197,7 @@
                 `;
             }
             
-            // إضافة زر التمديد إذا لم تكن الجلسة منتهية
-            if (!isExpired && session.status !== 'expired' && session.status !== 'disconnected') {
-                actionButtons += `<button class="btn btn-success" onclick="extendSession(${session.id})">🔄 ${t.renew}</button>`;
-            }
+            // لا يمكن للمستخدم تمديد الجلسة - فقط المدير
             
             let qrSection = '';
             if (session.status === 'waiting_for_qr' && session.qr_code) {
@@ -1290,29 +1265,7 @@
             }
         }
 
-        async function renewSession(sessionId) {
-            const t = translations[currentLanguage];
-            if (!confirm(t.confirmRenew)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/sessions/${sessionId}/renew`, {
-                    method: 'POST'
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    notificationSystem.success(data.message);
-                    await loadSessions(); // إعادة تحميل الجلسات
-                } else {
-                    notificationSystem.error(data.error || 'فشل في تمديد الجلسة');
-                }
-            } catch (error) {
-                console.error('Error renewing session:', error);
-                notificationSystem.error('فشل في تمديد الجلسة');
-            }
-        }
+        // لا يمكن للمستخدم تمديد الجلسة - فقط المدير يمكنه ذلك
 
         async function deleteSession(sessionId) {
             const t = translations[currentLanguage];
@@ -1485,36 +1438,7 @@
             modal.classList.remove('show');
         }
 
-        // تمديد الجلسة
-        async function extendSession(sessionId) {
-            const days = prompt('أدخل عدد الأيام المراد إضافتها (1-9999):');
-            if (days === null || days === '') return;
-            
-            const daysNum = parseInt(days);
-            if (isNaN(daysNum) || daysNum < 1 || daysNum > 9999) {
-                showNotification('error', 'عدد الأيام يجب أن يكون بين 1 و 9999');
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/api/sessions/${sessionId}/renew`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ days: daysNum })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    showNotification('success', `تم تمديد الجلسة بـ ${daysNum} يوم`);
-                    loadSessions();
-                } else {
-                    showNotification('error', data.error || 'فشل في تمديد الجلسة');
-                }
-            } catch (error) {
-                console.error('Error extending session:', error);
-                showNotification('error', 'فشل في تمديد الجلسة');
-            }
-        }
+        // لا يمكن للمستخدم تمديد الجلسة - فقط المدير يمكنه ذلك
     </script>
 </body>
 </html>

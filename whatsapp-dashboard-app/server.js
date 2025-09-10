@@ -657,39 +657,7 @@ app.post('/api/admin/sessions/:id/restart', requireAuth, requireAdmin, (req, res
     }
 });
 
-// تمديد جلسة (للمستخدمين)
-app.post('/api/sessions/:id/renew', requireAuth, async (req, res) => {
-    try {
-        const sessionId = req.params.id;
-        const userId = req.session.userId;
-        
-        // التحقق من أن الجلسة تخص المستخدم
-        const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(sessionId, userId);
-        if (!session) {
-            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
-        }
-        
-        // الحصول على مدة الجلسة المسموحة للمستخدم
-        const user = db.prepare('SELECT session_ttl_days FROM users WHERE id = ?').get(userId);
-        const days = user && user.session_ttl_days != null ? Number(user.session_ttl_days) : 30;
-        
-        // تمديد الجلسة
-        const newExpiryDate = new Date();
-        newExpiryDate.setDate(newExpiryDate.getDate() + days);
-        
-        db.prepare('UPDATE sessions SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(newExpiryDate.toISOString(), sessionId);
-        
-        res.json({ 
-            success: true, 
-            message: `تم تمديد الجلسة لمدة ${days} يوم`,
-            newExpiryDate: newExpiryDate.toISOString()
-        });
-    } catch (error) {
-        console.error('Error renewing session:', error);
-        res.status(500).json({ success: false, error: 'فشل في تمديد الجلسة' });
-    }
-});
+// تم إزالة API التمديد للمستخدمين - فقط المدير يمكنه التمديد
 
 // الحصول على معلومات انتهاء الصلاحية
 app.get('/api/sessions/:id/expiry', requireAuth, async (req, res) => {
