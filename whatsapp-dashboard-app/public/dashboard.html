@@ -243,6 +243,31 @@
             transition: all 0.3s ease;
             min-width: 100px;
         }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
 
         .btn-primary {
             background: #25D366;
@@ -400,6 +425,9 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             transition: all 0.3s ease;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
         }
         
         .session-card:hover {
@@ -431,7 +459,40 @@
         .session-actions {
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
             margin-top: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .session-actions .btn {
+            flex: 1;
+            min-width: 100px;
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 11px;
+            padding: 6px 10px;
+            margin: 2px;
+        }
+        
+        .session-actions {
+            margin-top: auto;
+            padding-top: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .session-actions {
+                flex-direction: column;
+                gap: 6px;
+            }
+            
+            .session-actions .btn {
+                width: 100%;
+                max-width: none;
+                min-width: auto;
+            }
         }
         
         .btn-small {
@@ -488,8 +549,9 @@
 
         .session-actions .btn {
             flex: 1;
-            padding: 10px;
-            font-size: 14px;
+            padding: 8px 12px;
+            font-size: 12px;
+            margin: 2px;
         }
 
         .qr-container {
@@ -1159,7 +1221,7 @@
             
             // إضافة زر التمديد إذا لم تكن الجلسة منتهية
             if (!isExpired && session.status !== 'expired' && session.status !== 'disconnected') {
-                actionButtons += `<button class="btn btn-warning" onclick="renewSession(${session.id})">🔄 ${t.renew}</button>`;
+                actionButtons += `<button class="btn btn-success" onclick="extendSession(${session.id})">🔄 ${t.renew}</button>`;
             }
             
             let qrSection = '';
@@ -1183,9 +1245,6 @@
                         ${actionButtons}
                         <button class="btn btn-info" onclick="viewSessionDetails(${session.id})">
                             📊 تفاصيل
-                        </button>
-                        <button class="btn btn-success" onclick="extendSession(${session.id})">
-                            🔄 تمديد
                         </button>
                         <button class="btn btn-danger" onclick="deleteSession(${session.id})">${t.delete}</button>
                     </div>
