@@ -428,17 +428,17 @@ app.put('/api/admin/users/:userId/limits', requireAuth, requireAdmin, async (req
         const { userId } = req.params;
         const { maxSessions, sessionTtlDays } = req.body;
 
-        if (maxSessions !== undefined && (maxSessions < 1 || maxSessions > 100)) {
+        if (maxSessions !== undefined && (maxSessions < 1 || maxSessions > 1000)) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'عدد الجلسات المسموحة يجب أن يكون بين 1 و 100' 
+                error: 'عدد الجلسات المسموحة يجب أن يكون بين 1 و 1000' 
             });
         }
 
-        if (sessionTtlDays !== undefined && (sessionTtlDays < 1 || sessionTtlDays > 365)) {
+        if (sessionTtlDays !== undefined && (sessionTtlDays < 1 || sessionTtlDays > 9999)) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'عدد أيام انتهاء الجلسة يجب أن يكون بين 1 و 365' 
+                error: 'عدد أيام انتهاء الجلسة يجب أن يكون بين 1 و 9999' 
             });
         }
 
@@ -484,10 +484,10 @@ app.put('/api/admin/sessions/:sessionId/settings', requireAuth, requireAdmin, (r
         const { sessionId } = req.params;
         const { maxDays, daysRemaining, isPaused, pauseReason } = req.body;
         
-        if (maxDays < 1 || maxDays > 365) {
+        if (maxDays < 1 || maxDays > 9999) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'عدد الأيام يجب أن يكون بين 1 و 365' 
+                error: 'عدد الأيام يجب أن يكون بين 1 و 9999' 
             });
         }
         
@@ -521,10 +521,10 @@ app.post('/api/admin/sessions/:sessionId/extend', requireAuth, requireAdmin, (re
         const { sessionId } = req.params;
         const { days } = req.body;
         
-        if (days < 1 || days > 365) {
+        if (days < 1 || days > 9999) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'عدد الأيام يجب أن يكون بين 1 و 365' 
+                error: 'عدد الأيام يجب أن يكون بين 1 و 9999' 
             });
         }
         
@@ -597,6 +597,29 @@ app.get('/api/admin/sessions', requireAuth, requireAdmin, (req, res) => {
             JOIN users u ON s.user_id = u.id 
             ORDER BY s.created_at DESC
         `).all();
+        
+        // تحديث الأيام المتبقية بناءً على الوقت الفعلي
+        const now = new Date();
+        rows.forEach(session => {
+            if (session.expires_at) {
+                const expiryDate = new Date(session.expires_at);
+                const timeDiff = expiryDate.getTime() - now.getTime();
+                const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                
+                // تحديث الأيام المتبقية في قاعدة البيانات إذا تغيرت
+                if (daysRemaining !== session.days_remaining) {
+                    db.prepare(`
+                        UPDATE sessions 
+                        SET days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `).run(Math.max(0, daysRemaining), session.id);
+                    
+                    // تحديث القيمة في النتيجة
+                    session.days_remaining = Math.max(0, daysRemaining);
+                }
+            }
+        });
+        
         res.json({ success: true, sessions: rows });
     } catch (error) {
         console.error('Error fetching sessions:', error);
@@ -1418,12 +1441,22 @@ app.post('/api/sessions', requireAuth, async (req, res) => {
             });
         }
         
-        // إعداد تاريخ الانتهاء للجلسة لو كان TTL محدد
+        // إعداد تاريخ الانتهاء والحدود للجلسة لو كان TTL محدد
         if (days > 0) {
             const expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + days);
-            db.prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
-              .run(expiryDate.toISOString(), result.lastInsertRowid);
+            db.prepare(`
+                UPDATE sessions 
+                SET expires_at = ?, max_days = ?, days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            `).run(expiryDate.toISOString(), days, days, result.lastInsertRowid);
+        } else {
+            // إذا لم يكن هناك TTL، تعيين قيم افتراضية
+            db.prepare(`
+                UPDATE sessions 
+                SET max_days = 30, days_remaining = 30, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            `).run(result.lastInsertRowid);
         }
         
         res.json({ success: true, sessionId: result.lastInsertRowid, message: 'تم إنشاء الجلسة بنجاح' });
@@ -1452,6 +1485,28 @@ app.get('/api/sessions', requireAuth, (req, res) => {
             ORDER BY s.created_at DESC
         `);
         const sessions = stmt.all(userId);
+        
+        // تحديث الأيام المتبقية بناءً على الوقت الفعلي
+        const now = new Date();
+        sessions.forEach(session => {
+            if (session.expires_at) {
+                const expiryDate = new Date(session.expires_at);
+                const timeDiff = expiryDate.getTime() - now.getTime();
+                const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                
+                // تحديث الأيام المتبقية في قاعدة البيانات إذا تغيرت
+                if (daysRemaining !== session.days_remaining) {
+                    db.prepare(`
+                        UPDATE sessions 
+                        SET days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `).run(Math.max(0, daysRemaining), session.id);
+                    
+                    // تحديث القيمة في النتيجة
+                    session.days_remaining = Math.max(0, daysRemaining);
+                }
+            }
+        });
         
         res.json(sessions);
     } catch (error) {
@@ -2148,4 +2203,30 @@ server.listen(PORT, async () => {
     
     // تنظيف الجلسات المنتهية كل ساعة
     setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+    
+    // تحديث الأيام المتبقية للجلسات كل 6 ساعات
+    setInterval(() => {
+        try {
+            const sessions = db.prepare('SELECT id, expires_at, days_remaining FROM sessions WHERE expires_at IS NOT NULL').all();
+            const now = new Date();
+            
+            sessions.forEach(session => {
+                const expiryDate = new Date(session.expires_at);
+                const timeDiff = expiryDate.getTime() - now.getTime();
+                const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                
+                if (daysRemaining !== session.days_remaining) {
+                    db.prepare(`
+                        UPDATE sessions 
+                        SET days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `).run(Math.max(0, daysRemaining), session.id);
+                }
+            });
+            
+            console.log(`🔄 تم تحديث الأيام المتبقية لـ ${sessions.length} جلسة`);
+        } catch (error) {
+            console.error('خطأ في تحديث الأيام المتبقية:', error.message);
+        }
+    }, 6 * 60 * 60 * 1000); // كل 6 ساعات
 });

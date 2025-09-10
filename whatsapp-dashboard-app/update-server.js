@@ -151,6 +151,33 @@ try {
         console.log('⚠️ جدول الإعدادات غير موجود، سيتم إنشاؤه عند تشغيل الخادم');
     }
     
+    // تحديث الأيام المتبقية للجلسات الموجودة
+    console.log('\n🔄 تحديث الأيام المتبقية للجلسات الموجودة...');
+    try {
+        const sessions = db.prepare('SELECT id, expires_at, max_days, days_remaining FROM sessions WHERE expires_at IS NOT NULL').all();
+        const now = new Date();
+        
+        sessions.forEach(session => {
+            const expiryDate = new Date(session.expires_at);
+            const timeDiff = expiryDate.getTime() - now.getTime();
+            const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            // تحديث الأيام المتبقية إذا تغيرت
+            if (daysRemaining !== session.days_remaining) {
+                db.prepare(`
+                    UPDATE sessions 
+                    SET days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                `).run(Math.max(0, daysRemaining), session.id);
+                console.log(`✅ تم تحديث الجلسة ${session.id}: ${daysRemaining} يوم متبقي`);
+            }
+        });
+        
+        console.log(`✅ تم تحديث ${sessions.length} جلسة`);
+    } catch (e) {
+        console.log('⚠️ خطأ في تحديث الأيام المتبقية:', e.message);
+    }
+    
     db.close();
     console.log('\n✅ تم تحديث قاعدة البيانات بنجاح!');
     

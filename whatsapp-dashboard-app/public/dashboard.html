@@ -1184,6 +1184,9 @@
                         <button class="btn btn-info" onclick="viewSessionDetails(${session.id})">
                             📊 تفاصيل
                         </button>
+                        <button class="btn btn-success" onclick="extendSession(${session.id})">
+                            🔄 تمديد
+                        </button>
                         <button class="btn btn-danger" onclick="deleteSession(${session.id})">${t.delete}</button>
                     </div>
                     
@@ -1421,6 +1424,37 @@
             const modal = document.getElementById(modalId);
             modal.style.display = 'none';
             modal.classList.remove('show');
+        }
+
+        // تمديد الجلسة
+        async function extendSession(sessionId) {
+            const days = prompt('أدخل عدد الأيام المراد إضافتها (1-9999):');
+            if (days === null || days === '') return;
+            
+            const daysNum = parseInt(days);
+            if (isNaN(daysNum) || daysNum < 1 || daysNum > 9999) {
+                showNotification('error', 'عدد الأيام يجب أن يكون بين 1 و 9999');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/renew`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: daysNum })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('success', `تم تمديد الجلسة بـ ${daysNum} يوم`);
+                    loadSessions();
+                } else {
+                    showNotification('error', data.error || 'فشل في تمديد الجلسة');
+                }
+            } catch (error) {
+                console.error('Error extending session:', error);
+                showNotification('error', 'فشل في تمديد الجلسة');
+            }
         }
     </script>
 </body>

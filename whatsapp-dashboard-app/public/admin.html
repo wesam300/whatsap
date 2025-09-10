@@ -770,13 +770,13 @@
                     <input type="hidden" id="editLimitsUserId">
                     <div class="form-group">
                         <label for="editMaxSessions">عدد الجلسات المسموحة</label>
-                        <input type="number" id="editMaxSessions" min="1" max="100" required>
-                        <small class="form-text">الحد الأقصى: 100 جلسة</small>
+                        <input type="number" id="editMaxSessions" min="1" max="1000" required>
+                        <small class="form-text">الحد الأقصى: 1000 جلسة</small>
                     </div>
                     <div class="form-group">
                         <label for="editSessionTtlDays">عدد أيام انتهاء الجلسة</label>
-                        <input type="number" id="editSessionTtlDays" min="1" max="365" required>
-                        <small class="form-text">الحد الأقصى: 365 يوم</small>
+                        <input type="number" id="editSessionTtlDays" min="1" max="9999" required>
+                        <small class="form-text">الحد الأقصى: 9999 يوم (أكثر من 27 سنة!)</small>
                     </div>
                 </form>
             </div>
@@ -799,12 +799,12 @@
                     <input type="hidden" id="sessionControlId">
                     <div class="form-group">
                         <label for="sessionMaxDays">الحد الأقصى للأيام</label>
-                        <input type="number" id="sessionMaxDays" min="1" max="365" required>
-                        <small class="form-text">الحد الأقصى: 365 يوم</small>
+                        <input type="number" id="sessionMaxDays" min="1" max="9999" required>
+                        <small class="form-text">الحد الأقصى: 9999 يوم (أكثر من 27 سنة!)</small>
                     </div>
                     <div class="form-group">
                         <label for="sessionDaysRemaining">الأيام المتبقية</label>
-                        <input type="number" id="sessionDaysRemaining" min="0" max="365" required>
+                        <input type="number" id="sessionDaysRemaining" min="0" max="9999" required>
                         <small class="form-text">عدد الأيام المتبقية للجلسة</small>
                     </div>
                     <div class="form-group">
@@ -824,6 +824,8 @@
                             <button type="button" class="btn btn-success" onclick="extendSession(7)">+7 أيام</button>
                             <button type="button" class="btn btn-success" onclick="extendSession(30)">+30 يوم</button>
                             <button type="button" class="btn btn-success" onclick="extendSession(90)">+90 يوم</button>
+                            <button type="button" class="btn btn-success" onclick="extendSession(365)">+1 سنة</button>
+                            <button type="button" class="btn btn-success" onclick="extendSession(1095)">+3 سنوات</button>
                         </div>
                     </div>
                 </form>
@@ -851,12 +853,12 @@
                     </div>
                     <div class="form-group">
                         <label for="defaultMaxSessions">الحد الأقصى الافتراضي للجلسات</label>
-                        <input type="number" id="defaultMaxSessions" min="1" max="100" value="5">
-                        <small class="form-text">عدد الجلسات الافتراضي للمستخدمين الجدد</small>
+                        <input type="number" id="defaultMaxSessions" min="1" max="1000" value="5">
+                        <small class="form-text">عدد الجلسات الافتراضي للمستخدمين الجدد (الحد الأقصى: 1000)</small>
                     </div>
                     <div class="form-group">
                         <label for="defaultSessionDays">عدد أيام الجلسة الافتراضي</label>
-                        <input type="number" id="defaultSessionDays" min="1" max="365" value="30">
+                        <input type="number" id="defaultSessionDays" min="1" max="9999" value="30">
                         <small class="form-text">عدد أيام انتهاء الجلسة الافتراضي</small>
                     </div>
                 </form>
@@ -1558,13 +1560,13 @@
             const defaultMaxSessions = parseInt(document.getElementById('defaultMaxSessions').value);
             const defaultSessionDays = parseInt(document.getElementById('defaultSessionDays').value);
 
-            if (defaultMaxSessions < 1 || defaultMaxSessions > 100) {
-                showNotification('error', 'الحد الأقصى للجلسات يجب أن يكون بين 1 و 100');
+            if (defaultMaxSessions < 1 || defaultMaxSessions > 1000) {
+                showNotification('error', 'الحد الأقصى للجلسات يجب أن يكون بين 1 و 1000');
                 return;
             }
 
-            if (defaultSessionDays < 1 || defaultSessionDays > 365) {
-                showNotification('error', 'عدد أيام الجلسة يجب أن يكون بين 1 و 365');
+            if (defaultSessionDays < 1 || defaultSessionDays > 9999) {
+                showNotification('error', 'عدد أيام الجلسة يجب أن يكون بين 1 و 9999');
                 return;
             }
 
@@ -1646,8 +1648,8 @@
             const isPaused = document.getElementById('sessionIsPaused').value === 'true';
             const pauseReason = document.getElementById('sessionPauseReason').value;
 
-            if (maxDays < 1 || maxDays > 365) {
-                showNotification('error', 'الحد الأقصى للأيام يجب أن يكون بين 1 و 365');
+            if (maxDays < 1 || maxDays > 9999) {
+                showNotification('error', 'الحد الأقصى للأيام يجب أن يكون بين 1 و 9999');
                 return;
             }
 
@@ -1943,6 +1945,12 @@
                             </button>
                             <button class="btn btn-success" onclick="extendSessionQuick(${session.id}, 7)">
                                 +7 أيام
+                            </button>
+                            <button class="btn btn-success" onclick="extendSessionQuick(${session.id}, 30)">
+                                +30 يوم
+                            </button>
+                            <button class="btn btn-success" onclick="extendSessionQuick(${session.id}, 365)">
+                                +1 سنة
                             </button>
                             <button class="btn btn-warning" onclick="toggleSessionPause(${session.id}, ${session.is_paused})">
                                 ${session.is_paused ? '▶️ تفعيل' : '⏸️ إيقاف'}
