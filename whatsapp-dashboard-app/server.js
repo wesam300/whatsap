@@ -328,9 +328,9 @@ app.get('/api/stats', requireAuth, (req, res) => {
             SELECT COUNT(1) as c
             FROM messages m
             JOIN sessions s ON s.id = m.session_id
-            WHERE s.user_id = ? AND m.timestamp >= datetime('now','-1 day')
+            WHERE s.user_id = ? AND m.timestamp >= datetime(CURRENT_TIMESTAMP,'-1 day')
         `).get(userId).c;
-        const api24h = db.prepare("SELECT COUNT(1) as c FROM api_logs WHERE user_id = ? AND created_at >= datetime('now','-1 day')").get(userId).c;
+        const api24h = db.prepare("SELECT COUNT(1) as c FROM api_logs WHERE user_id = ? AND created_at >= datetime(CURRENT_TIMESTAMP,'-1 day')").get(userId).c;
         res.json({ success: true, stats: { totalSessions, connectedSessions, messages24h, api24h }});
     } catch (e) {
         res.status(500).json({ error: 'Failed to load stats' });
@@ -346,9 +346,9 @@ app.get('/api/admin/stats', requireAuth, requireAdmin, (req, res) => {
             totalSessions: db.prepare('SELECT COUNT(*) as count FROM sessions').get().count,
             connectedSessions: db.prepare("SELECT COUNT(*) as count FROM sessions WHERE status = 'connected'").get().count,
             totalMessages: db.prepare('SELECT COUNT(*) as count FROM messages').get().count,
-            messages24h: db.prepare("SELECT COUNT(*) as count FROM messages WHERE timestamp >= datetime('now','-1 day')").get().count,
+            messages24h: db.prepare("SELECT COUNT(*) as count FROM messages WHERE timestamp >= datetime(CURRENT_TIMESTAMP,'-1 day')").get().count,
             apiCalls: db.prepare('SELECT COUNT(*) as count FROM api_logs').get().count,
-            api24h: db.prepare("SELECT COUNT(*) as count FROM api_logs WHERE created_at >= datetime('now','-1 day')").get().count
+            api24h: db.prepare("SELECT COUNT(*) as count FROM api_logs WHERE created_at >= datetime(CURRENT_TIMESTAMP,'-1 day')").get().count
         };
         res.json({ success: true, stats });
     } catch (error) {
@@ -1304,7 +1304,7 @@ app.post('/api/verify-email', async (req, res) => {
         }
 
         // البحث عن رمز التحقق
-        const tokenStmt = db.prepare('SELECT * FROM email_verification_tokens WHERE user_id = ? AND token = ? AND expires_at > datetime("now")');
+        const tokenStmt = db.prepare('SELECT * FROM email_verification_tokens WHERE user_id = ? AND token = ? AND expires_at > CURRENT_TIMESTAMP');
         const token = tokenStmt.get(user.id, code);
         
         if (!token) {
@@ -1445,7 +1445,7 @@ app.get('/api/sessions', requireAuth, (req, res) => {
         const stmt = db.prepare(`
             SELECT s.*, 
                    CASE 
-                       WHEN s.expires_at IS NOT NULL AND s.expires_at < datetime('now') THEN 'expired'
+                       WHEN s.expires_at IS NOT NULL AND s.expires_at < CURRENT_TIMESTAMP THEN 'expired'
                        ELSE s.status 
                    END as status
             FROM sessions s 
@@ -1546,7 +1546,7 @@ io.on('connection', (socket) => {
             
             // منع بدء جلسة منتهية الصلاحية
             if (session.expires_at) {
-                const row = db.prepare('SELECT datetime(?) <= datetime("now") as expired').get(session.expires_at);
+                const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
                 if (row.expired) {
                     socket.emit('session_error', { error: 'انتهت صلاحية الجلسة. يرجى التجديد.' });
                     return;
@@ -1711,7 +1711,7 @@ io.on('connection', (socket) => {
                     const insert = db.prepare(`
                         INSERT OR IGNORE INTO messages (
                             session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, media_base64, sender, receiver, timestamp
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     `);
                     let mediaBase64 = null;
                     let mediaMime = null;
