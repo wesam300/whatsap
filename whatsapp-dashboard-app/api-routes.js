@@ -171,6 +171,15 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             });
         }
         
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
+            });
+        }
+        
         // إرسال الرسالة
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const result = await client.sendMessage(chatId, message);
@@ -266,6 +275,15 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
                 success: false,
                 error: 'الجلسة غير موجودة أو غير متصلة',
                 code: 'SESSION_NOT_FOUND'
+            });
+        }
+        
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
             });
         }
         
@@ -892,9 +910,14 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
         
         // إيقاف الجلسة الحالية إذا كانت موجودة
         if (activeClientsRef && activeClientsRef.has(sessionId)) {
-            const currentClient = activeClientsRef.get(sessionId);
-            await currentClient.destroy();
-            activeClientsRef.delete(sessionId);
+            try {
+                const currentClient = activeClientsRef.get(sessionId);
+                await currentClient.destroy();
+            } catch (destroyError) {
+                console.log('Error destroying old client:', destroyError.message);
+            } finally {
+                activeClientsRef.delete(sessionId);
+            }
         }
         
         // إنشاء جلسة جديدة
@@ -916,19 +939,35 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
         
         // انتظار الجلسة لتكون جاهزة
         await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Timeout waiting for session')), 30000);
+            const timeout = setTimeout(() => {
+                activeClientsRef.delete(sessionId);
+                reject(new Error('Timeout waiting for session'));
+            }, 30000);
             
             client.on('ready', () => {
                 clearTimeout(timeout);
                 resolve();
             });
             
-            client.on('disconnected', () => {
+            client.on('disconnected', (reason) => {
                 clearTimeout(timeout);
-                reject(new Error('Session disconnected'));
+                activeClientsRef.delete(sessionId);
+                reject(new Error(`Session disconnected: ${reason}`));
             });
             
-            client.initialize();
+            client.on('auth_failure', (msg) => {
+                clearTimeout(timeout);
+                activeClientsRef.delete(sessionId);
+                reject(new Error(`Authentication failed: ${msg}`));
+            });
+            
+            try {
+                client.initialize();
+            } catch (initError) {
+                clearTimeout(timeout);
+                activeClientsRef.delete(sessionId);
+                reject(new Error(`Failed to initialize client: ${initError.message}`));
+            }
         });
         
         res.json({
