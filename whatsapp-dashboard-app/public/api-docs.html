@@ -506,7 +506,7 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
                     <span class="method method-post">POST</span>
                     <span class="endpoint-url">/api/send-media</span>
                 </div>
-                <p>إرسال ملف مع رسالة نصية اختيارية.</p>
+                <p>إرسال ملف مع رسالة نصية اختيارية. يمكنك الإرسال إمّا برفع ملف multipart (حقل <code>media</code>) أو بتمرير رابط مباشر في الحقل <code>url</code> (يتم تنزيله في الذاكرة فقط بدون حفظ).</p>
 
                 <h4>المعاملات المطلوبة:</h4>
                 <table class="param-table">
@@ -528,8 +528,14 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
                         <tr>
                             <td>media</td>
                             <td>file</td>
-                            <td>الملف المراد إرساله</td>
-                            <td class="required">نعم</td>
+                            <td>الملف المراد إرساله (بديل عن url)</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                        <tr>
+                            <td>url</td>
+                            <td>string (URL)</td>
+                            <td>رابط مباشر للملف (بديل عن media). الحد الأقصى 16MB</td>
+                            <td class="optional">لا</td>
                         </tr>
                         <tr>
                             <td>caption</td>
@@ -539,6 +545,10 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
                         </tr>
                     </tbody>
                 </table>
+
+                <div class="note">
+                    يمكن استخدام أحد الحقلين فقط: <code>media</code> أو <code>url</code>. إذا تم تمرير كليهما سيتم تفضيل الملف المرفوع.
+                </div>
 
                 <h3>إرسال رسالة للمجموعة</h3>
                 <div class="endpoint">
@@ -717,6 +727,18 @@ curl -X POST "http://localhost:3000/api/send-media" \
   -F "to=966501234567" \
   -F "media=@/path/to/image.jpg" \
   -F "caption=صورة جميلة!"
+                </div>
+
+                <h3>🆕 مثال: إرسال ملف من رابط مباشر (بدون حفظ)</h3>
+                <div class="code-block">
+curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-media" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "966501234567",
+    "url": "https://example.com/path/report.pdf",
+    "caption": "تقرير اليوم"
+  }'
                 </div>
 
                 <h3>مثال: إرسال رسالة للمجموعة</h3>

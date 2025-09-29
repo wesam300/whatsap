@@ -8,6 +8,8 @@ const cors = require('cors');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { MessageMedia } = require('whatsapp-web.js');
+const fetch = require('node-fetch');
+const mime = require('mime');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
 
@@ -70,6 +72,63 @@ const upload = multer({
         }
     }
 });
+
+// تنزيل ملف من رابط إلى الذاكرة فقط (بدون حفظ على القرص)
+async function downloadFileToMemory(url, maxBytes = 16 * 1024 * 1024) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > maxBytes) {
+            throw new Error('FILE_TOO_LARGE');
+        }
+
+        const chunks = [];
+        let downloaded = 0;
+        return await new Promise((resolve, reject) => {
+            response.body.on('data', (chunk) => {
+                downloaded += chunk.length;
+                if (downloaded > maxBytes) {
+                    response.body.destroy();
+                    reject(new Error('FILE_TOO_LARGE'));
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            response.body.on('end', () => {
+                const buffer = Buffer.concat(chunks);
+                const contentType = response.headers.get('content-type') || 'application/octet-stream';
+                let filename = 'file';
+                const cd = response.headers.get('content-disposition');
+                if (cd) {
+                    const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+                    const rawName = (match && (match[1] || match[2])) || 'file';
+                    try { filename = decodeURIComponent(rawName); } catch (_) { filename = rawName; }
+                } else {
+                    try {
+                        const u = new URL(url);
+                        const base = u.pathname.split('/').filter(Boolean).pop();
+                        if (base) filename = base;
+                    } catch (_) {}
+                }
+                // إلحاق امتداد مناسب إن لم يوجد
+                if (!filename.includes('.') && contentType) {
+                    const ext = mime.getExtension(contentType);
+                    if (ext) filename = `${filename}.${ext}`;
+                }
+                resolve({ buffer, contentType, filename });
+            });
+            response.body.on('error', (err) => reject(err));
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
 
 // ========================================
 // Middleware للتحقق من صحة المفاتيح
@@ -332,14 +391,14 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
     const startTime = Date.now();
     
     try {
-        const { to, caption } = req.body;
+        const { to, caption, url } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
         
-        if (!to || !req.file) {
+        if (!to || (!req.file && !url)) {
             return res.status(400).json({
                 success: false,
-                error: 'رقم الهاتف والملف مطلوبان',
+                error: 'رقم الهاتف والملف أو الرابط مطلوب',
                 code: 'MISSING_PARAMETERS'
             });
         }
@@ -354,12 +413,25 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
             });
         }
         
-        // إنشاء Media Message
-        const media = new MessageMedia(
-            req.file.mimetype,
-            req.file.buffer.toString('base64'),
-            req.file.originalname
-        );
+        // إنشاء Media Message (من ملف مرفوع أو من رابط)
+        let media;
+        if (req.file) {
+            media = new MessageMedia(
+                req.file.mimetype,
+                req.file.buffer.toString('base64'),
+                req.file.originalname
+            );
+        } else {
+            try {
+                const { buffer, contentType, filename } = await downloadFileToMemory(url);
+                media = new MessageMedia(contentType, buffer.toString('base64'), filename);
+            } catch (e) {
+                if (e.message === 'FILE_TOO_LARGE') {
+                    return res.status(400).json({ success: false, error: 'حجم الملف كبير جداً (الحد الأقصى 16MB)', code: 'FILE_TOO_LARGE' });
+                }
+                return res.status(400).json({ success: false, error: 'فشل تنزيل الملف من الرابط', details: e.message, code: 'DOWNLOAD_FAILED' });
+            }
+        }
         
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
@@ -406,14 +478,14 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
     const startTime = Date.now();
     
     try {
-        const { to, caption } = req.body;
+        const { to, caption, url } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
         
-        if (!to || !req.file) {
+        if (!to || (!req.file && !url)) {
             return res.status(400).json({
                 success: false,
-                error: 'رقم الهاتف والملف مطلوبان',
+                error: 'رقم الهاتف والملف أو الرابط مطلوب',
                 code: 'MISSING_PARAMETERS'
             });
         }
@@ -428,12 +500,25 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
             });
         }
         
-        // إنشاء MessageMedia
-        const media = new MessageMedia(
-            req.file.mimetype,
-            req.file.buffer.toString('base64'),
-            req.file.originalname
-        );
+        // إنشاء MessageMedia (من ملف مرفوع أو من رابط)
+        let media;
+        if (req.file) {
+            media = new MessageMedia(
+                req.file.mimetype,
+                req.file.buffer.toString('base64'),
+                req.file.originalname
+            );
+        } else {
+            try {
+                const { buffer, contentType, filename } = await downloadFileToMemory(url);
+                media = new MessageMedia(contentType, buffer.toString('base64'), filename);
+            } catch (e) {
+                if (e.message === 'FILE_TOO_LARGE') {
+                    return res.status(400).json({ success: false, error: 'حجم الملف كبير جداً (الحد الأقصى 16MB)', code: 'FILE_TOO_LARGE' });
+                }
+                return res.status(400).json({ success: false, error: 'فشل تنزيل الملف من الرابط', details: e.message, code: 'DOWNLOAD_FAILED' });
+            }
+        }
         
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
@@ -453,11 +538,11 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
             message: 'تم إرسال الملف بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString(),
-            fileInfo: {
+            fileInfo: req.file ? {
                 name: req.file.originalname,
                 size: req.file.size,
                 type: req.file.mimetype
-            }
+            } : undefined
         });
         
     } catch (error) {
