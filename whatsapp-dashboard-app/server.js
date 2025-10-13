@@ -28,6 +28,9 @@ const {
     getSessionTokenBySessionId, deleteSessionTokenBySessionId
 } = require('./api-key-manager');
 
+// التحكم في تخزين الرسائل (افتراضياً معطّل لضمان عدم حفظ أي رسائل أو ميديا)
+const DISABLE_MESSAGE_STORAGE = (process.env.DISABLE_MESSAGE_STORAGE ?? 'true') === 'true';
+
 // Helpers
 function ensureUserIsActive(req, res) {
     const user = db.prepare('SELECT is_active FROM users WHERE id = ?').get(req.session.userId);
@@ -1705,56 +1708,56 @@ io.on('connection', (socket) => {
                 activeClients.delete(String(sessionId));
             });
             
-            // الاستماع للرسائل الواردة وتخزينها
-            client.on('message', async (msg) => {
-                try {
-                    const insert = db.prepare(`
-                        INSERT OR IGNORE INTO messages (
-                            session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, media_base64, sender, receiver, timestamp
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    `);
-                    let mediaBase64 = null;
-                    let mediaMime = null;
-                    let hasMedia = false;
-                    if (msg.hasMedia) {
-                        try {
-                            const media = await msg.downloadMedia();
-                            if (media) {
-                                mediaBase64 = media.data;
-                                mediaMime = media.mimetype;
-                                hasMedia = true;
-                            }
-                        } catch (_) {}
+            // الاستماع للرسائل الواردة: تعطيل التخزين نهائياً وعدم تنزيل الميديا عند تفعيل DISABLE_MESSAGE_STORAGE
+            if (DISABLE_MESSAGE_STORAGE) {
+                client.on('message', (msg) => {
+                    // تم التعطيل بناءً على الإعداد؛ عدم تخزين الرسائل أو تنزيل الميديا
+                });
+            } else {
+                client.on('message', async (msg) => {
+                    try {
+                        const insert = db.prepare(`
+                            INSERT OR IGNORE INTO messages (
+                                session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, media_base64, sender, receiver, timestamp
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        `);
+                        let mediaBase64 = null;
+                        let mediaMime = null;
+                        let hasMedia = false;
+                        if (msg.hasMedia) {
+                            try {
+                                const media = await msg.downloadMedia();
+                                if (media) {
+                                    mediaBase64 = media.data;
+                                    mediaMime = media.mimetype;
+                                    hasMedia = true;
+                                }
+                            } catch (_) {}
+                        }
+                        const chatId = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
+                        const messageId = (typeof msg.id === 'object' && msg.id !== null) ? msg.id._serialized : (msg.id || `${Date.now()}-${Math.random()}`);
+                        const sender = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
+                        const receiver = (typeof msg.to === 'object' && msg.to !== null) ? msg.to._serialized : (msg.to || '');
+                        const safeValues = [
+                            String(sessionId),
+                            String(chatId),
+                            String(messageId),
+                            msg.fromMe ? 1 : 0,
+                            String(msg.type || 'chat'),
+                            String(msg.body || ''),
+                            hasMedia ? 1 : 0,
+                            mediaMime ? String(mediaMime) : null,
+                            mediaBase64 ? String(mediaBase64) : null,
+                            String(sender),
+                            String(receiver)
+                        ];
+                        console.log('Saving message with values:', safeValues.map((v, i) => `${i}: ${typeof v} = ${v}`).join(', '));
+                        insert.run(...safeValues);
+                    } catch (e) {
+                        console.error('فشل في حفظ الرسالة الواردة:', e.message);
                     }
-                    // Safely serialize object properties for SQLite binding
-                    const chatId = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
-                    const messageId = (typeof msg.id === 'object' && msg.id !== null) ? msg.id._serialized : (msg.id || `${Date.now()}-${Math.random()}`);
-                    const sender = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
-                    const receiver = (typeof msg.to === 'object' && msg.to !== null) ? msg.to._serialized : (msg.to || '');
-                    
-                    // Ensure all values are SQLite-compatible (numbers, strings, bigints, buffers, null)
-                    const safeValues = [
-                        String(sessionId),                    // session_id
-                        String(chatId),                       // chat_id
-                        String(messageId),                    // message_id
-                        msg.fromMe ? 1 : 0,                   // from_me (convert boolean to integer)
-                        String(msg.type || 'chat'),           // type
-                        String(msg.body || ''),               // body
-                        hasMedia ? 1 : 0,                     // has_media (convert boolean to integer)
-                        mediaMime ? String(mediaMime) : null, // media_mime_type
-                        mediaBase64 ? String(mediaBase64) : null, // media_base64
-                        String(sender),                       // sender
-                        String(receiver)                      // receiver
-                    ];
-                    
-                    // Debug logging
-                    console.log('Saving message with values:', safeValues.map((v, i) => `${i}: ${typeof v} = ${v}`).join(', '));
-                    
-                    insert.run(...safeValues);
-                } catch (e) {
-                    console.error('فشل في حفظ الرسالة الواردة:', e.message);
-                }
-            });
+                });
+            }
 
             client.initialize();
             
