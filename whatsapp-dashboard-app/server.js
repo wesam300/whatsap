@@ -846,16 +846,7 @@ app.post('/api/admin/users/:userId/active', requireAuth, requireAdmin, (req, res
     res.json({ success: true });
 });
 
-app.post('/api/admin/users/:userId/limits', requireAuth, requireAdmin, (req, res) => {
-    const { userId } = req.params;
-    const { maxSessions, sessionTtlHours } = req.body;
-    db.prepare('UPDATE users SET max_sessions = ?, session_ttl_hours = ? WHERE id = ?').run(
-        maxSessions != null ? Number(maxSessions) : null,
-        sessionTtlHours != null ? Number(sessionTtlHours) : null,
-        userId
-    );
-    res.json({ success: true });
-});
+// تم إزالة هذا المسار القديم - استخدم PUT /api/admin/users/:userId/limits بدلاً منه
 
 app.post('/api/admin/users/:userId/logout', requireAuth, requireAdmin, async (req, res) => {
     const { userId } = req.params;
@@ -874,25 +865,7 @@ app.post('/api/admin/users/:userId/logout', requireAuth, requireAdmin, async (re
     res.json({ success: true });
 });
 
-// إعدادات الأدمن (الهاتف والباقات)
-app.get('/api/admin/settings', requireAuth, requireAdmin, (req, res) => {
-    try {
-        const row = db.prepare('SELECT admin_phone, packages_json, updated_at FROM settings WHERE id = 1').get();
-        res.json({ success: true, settings: { adminPhone: row?.admin_phone || '', packagesJson: row?.packages_json || '[]', updatedAt: row?.updated_at } });
-    } catch (e) { res.status(500).json({ error: 'Failed to load settings' }); }
-});
-
-app.post('/api/admin/settings', requireAuth, requireAdmin, (req, res) => {
-    try {
-        const { adminPhone, packagesJson } = req.body;
-        // Validate JSON
-        let parsed = [];
-        if (packagesJson) { parsed = JSON.parse(packagesJson); }
-        db.prepare('INSERT INTO settings (id, admin_phone, packages_json, updated_at) VALUES (1, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET admin_phone=excluded.admin_phone, packages_json=excluded.packages_json, updated_at=CURRENT_TIMESTAMP')
-          .run(adminPhone || '', JSON.stringify(parsed));
-        res.json({ success: true });
-    } catch (e) { res.status(400).json({ error: 'Invalid packages JSON' }); }
-});
+// تم دمج هذا المسار مع المسار السابق - لا حاجة للتكرار
 
 // ========================================
 // مسارات API
@@ -1385,50 +1358,39 @@ app.post('/api/sessions', requireAuth, async (req, res) => {
         const userId = req.session.userId;
         if (!ensureUserIsActive(req, res)) return;
 
-        // تحقق من الحد الأقصى للجلسات
-        const { max_sessions } = db.prepare('SELECT max_sessions FROM users WHERE id = ?').get(userId);
-        const { c } = db.prepare('SELECT COUNT(1) as c FROM sessions WHERE user_id = ?').get(userId);
-        if (max_sessions != null && c >= max_sessions) {
-            return res.status(403).json({ error: 'تم بلوغ الحد الأقصى للجلسات' });
-        }
-        
-        const stmt = db.prepare('INSERT INTO sessions (session_name, user_id) VALUES (?, ?)');
-        const result = stmt.run(sessionName, userId);
-
         // التحقق من حدود الجلسات المسموحة للمستخدم
         const user = db.prepare('SELECT max_sessions, session_ttl_days FROM users WHERE id = ?').get(userId);
-        const maxSessions = user && user.max_sessions != null ? Number(user.max_sessions) : 5;
-        const days = user && user.session_ttl_days != null ? Number(user.session_ttl_days) : 30;
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+
+        const maxSessions = user.max_sessions != null ? Number(user.max_sessions) : 5;
+        const days = user.session_ttl_days != null ? Number(user.session_ttl_days) : 30;
         
-        // عد الجلسات النشطة للمستخدم
-        const activeSessions = db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = ? AND status != ?').get(userId, 'disconnected');
+        // عد جميع الجلسات للمستخدم (بما فيها المنفصلة)
+        const allSessions = db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = ?').get(userId);
         
-        if (activeSessions.count >= maxSessions) {
-            // حذف الجلسة التي تم إنشاؤها للتو
-            db.prepare('DELETE FROM sessions WHERE id = ?').run(result.lastInsertRowid);
-            return res.status(400).json({ 
-                success: false, 
-                error: `تم الوصول للحد الأقصى من الجلسات المسموحة (${maxSessions}). يرجى حذف جلسة أخرى أولاً.` 
+        // التحقق من الحد الأقصى للجلسات
+        if (maxSessions > 0 && allSessions.count >= maxSessions) {
+            return res.status(403).json({ 
+                success: false,
+                error: `تم بلوغ الحد الأقصى للجلسات المسموحة (${maxSessions}). يرجى حذف جلسة أخرى أولاً.` 
             });
         }
         
-        // إعداد تاريخ الانتهاء والحدود للجلسة لو كان TTL محدد
-        if (days > 0) {
-            const expiryDate = new Date();
-            expiryDate.setDate(expiryDate.getDate() + days);
-            db.prepare(`
-                UPDATE sessions 
-                SET expires_at = ?, max_days = ?, days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            `).run(expiryDate.toISOString(), days, days, result.lastInsertRowid);
-        } else {
-            // إذا لم يكن هناك TTL، تعيين قيم افتراضية
-            db.prepare(`
-                UPDATE sessions 
-                SET max_days = 30, days_remaining = 30, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            `).run(result.lastInsertRowid);
-        }
+        // إنشاء الجلسة
+        const stmt = db.prepare('INSERT INTO sessions (session_name, user_id) VALUES (?, ?)');
+        const result = stmt.run(sessionName, userId);
+        
+        // إعداد تاريخ الانتهاء والحدود للجلسة
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + days);
+        
+        db.prepare(`
+            UPDATE sessions 
+            SET expires_at = ?, max_days = ?, days_remaining = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `).run(expiryDate.toISOString(), days, days, result.lastInsertRowid);
         
         res.json({ success: true, sessionId: result.lastInsertRowid, message: 'تم إنشاء الجلسة بنجاح' });
     } catch (error) {

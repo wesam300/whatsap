@@ -411,6 +411,13 @@
             transition: border-color 0.3s ease;
         }
 
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
         .form-group input:focus,
         .form-group select:focus,
         .form-group textarea:focus {
@@ -771,12 +778,12 @@
                     <div class="form-group">
                         <label for="editMaxSessions">عدد الجلسات المسموحة</label>
                         <input type="number" id="editMaxSessions" min="1" max="1000" required>
-                        <small class="form-text">الحد الأقصى: 1000 جلسة</small>
+                        <small>الحد الأدنى: 1 جلسة | الحد الأقصى: 1000 جلسة</small>
                     </div>
                     <div class="form-group">
-                        <label for="editSessionTtlDays">عدد أيام انتهاء الجلسة</label>
+                        <label for="editSessionTtlDays">عدد أيام انتهاء الجلسة (للمستخدم الجديد)</label>
                         <input type="number" id="editSessionTtlDays" min="1" max="9999" required>
-                        <small class="form-text">الحد الأقصى: 9999 يوم (أكثر من 27 سنة!)</small>
+                        <small>الحد الأدنى: 1 يوم | الحد الأقصى: 9999 يوم (أكثر من 27 سنة)</small>
                     </div>
                 </form>
             </div>
@@ -809,14 +816,16 @@
                     </div>
                     <div class="form-group">
                         <label for="sessionIsPaused">حالة الجلسة</label>
-                        <select id="sessionIsPaused" class="form-control">
+                        <select id="sessionIsPaused" class="form-control" onchange="togglePauseReason()">
                             <option value="false">نشطة</option>
                             <option value="true">معلقة</option>
                         </select>
+                        <small>يمكن إيقاف الجلسة مؤقتاً بدون حذفها</small>
                     </div>
                     <div class="form-group" id="pauseReasonGroup" style="display: none;">
                         <label for="sessionPauseReason">سبب الإيقاف</label>
-                        <input type="text" id="sessionPauseReason" placeholder="أدخل سبب إيقاف الجلسة">
+                        <input type="text" id="sessionPauseReason" placeholder="أدخل سبب إيقاف الجلسة (اختياري)">
+                        <small>يتم عرض سبب الإيقاف للمستخدم في لوحة التحكم</small>
                     </div>
                     <div class="form-group">
                         <label>تحديث سريع</label>
@@ -1633,11 +1642,21 @@
             // إظهار/إخفاء حقل سبب الإيقاف
             const pauseReasonGroup = document.getElementById('pauseReasonGroup');
             pauseReasonGroup.style.display = session.is_paused ? 'block' : 'none';
+            
+            // إضافة event listener لتغيير حالة الإيقاف
+            document.getElementById('sessionIsPaused').addEventListener('change', togglePauseReason);
 
             // إظهار Modal
             const modal = document.getElementById('sessionControlModal');
             modal.style.display = 'block';
             modal.classList.add('show');
+        }
+
+        // إظهار/إخفاء حقل سبب الإيقاف
+        function togglePauseReason() {
+            const isPaused = document.getElementById('sessionIsPaused').value === 'true';
+            const pauseReasonGroup = document.getElementById('pauseReasonGroup');
+            pauseReasonGroup.style.display = isPaused ? 'block' : 'none';
         }
 
         // تحديث إعدادات الجلسة
@@ -1758,13 +1777,13 @@
                 return;
             }
 
-            if (maxSessions < 1 || maxSessions > 100) {
-                showNotification('error', 'عدد الجلسات يجب أن يكون بين 1 و 100');
+            if (maxSessions < 1 || maxSessions > 1000) {
+                showNotification('error', 'عدد الجلسات يجب أن يكون بين 1 و 1000');
                 return;
             }
 
-            if (sessionTtlDays < 1 || sessionTtlDays > 365) {
-                showNotification('error', 'عدد أيام الجلسة يجب أن يكون بين 1 و 365');
+            if (sessionTtlDays < 1 || sessionTtlDays > 9999) {
+                showNotification('error', 'عدد أيام الجلسة يجب أن يكون بين 1 و 9999');
                 return;
             }
 
@@ -1820,19 +1839,19 @@
                         <div class="user-details">
                             <div class="detail-item">
                                 <div class="detail-label">الجلسات المسموحة</div>
-                                <div class="detail-value">${user.max_sessions || 1}</div>
+                                <div class="detail-value" style="font-size: 18px; color: #25D366;">${user.max_sessions || 1}</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">أيام الجلسة</div>
-                                <div class="detail-value">${user.session_ttl_days || 30} يوم</div>
+                                <div class="detail-value" style="font-size: 18px; color: #128C7E;">${user.session_ttl_days || 30} يوم</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">تاريخ الإنشاء</div>
-                                <div class="detail-value">${new Date(user.created_at).toLocaleDateString('ar-SA')}</div>
+                                <div class="detail-value">${new Date(user.created_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">آخر نشاط</div>
-                                <div class="detail-value">${user.last_login ? new Date(user.last_login).toLocaleDateString('ar-SA') : 'لم يسجل دخول'}</div>
+                                <div class="detail-value">${user.last_login ? new Date(user.last_login).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }) : 'لم يسجل دخول'}</div>
                             </div>
                         </div>
                         
@@ -1906,32 +1925,36 @@
                         <div class="user-details">
                             <div class="detail-item">
                                 <div class="detail-label">معرف الجلسة</div>
-                                <div class="detail-value">${session.id}</div>
+                                <div class="detail-value" style="font-family: monospace; font-size: 14px;">#${session.id}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">المستخدم</div>
+                                <div class="detail-value">${session.username} (${session.email})</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">تاريخ الإنشاء</div>
-                                <div class="detail-value">${new Date(session.created_at).toLocaleDateString('ar-SA')}</div>
+                                <div class="detail-value">${new Date(session.created_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">انتهاء الصلاحية</div>
-                                <div class="detail-value ${isExpired ? 'text-danger' : ''}">${session.expires_at ? new Date(session.expires_at).toLocaleDateString('ar-SA') : 'غير محدد'}</div>
+                                <div class="detail-value ${isExpired ? 'text-danger' : ''}" style="font-weight: bold;">${session.expires_at ? new Date(session.expires_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }) : 'غير محدد'}</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">الأيام المتبقية</div>
-                                <div class="detail-value ${session.days_remaining <= 3 ? 'text-warning' : ''}">${session.days_remaining || 0} يوم</div>
+                                <div class="detail-value ${session.days_remaining <= 3 ? 'text-warning' : ''}" style="font-size: 18px; font-weight: bold;">${session.days_remaining || 0} يوم</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">الحد الأقصى للأيام</div>
-                                <div class="detail-value">${session.max_days || 30} يوم</div>
+                                <div class="detail-value" style="color: #666;">${session.max_days || 30} يوم</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">حالة الإيقاف</div>
-                                <div class="detail-value">${session.is_paused ? '⏸️ معلقة' : '▶️ نشطة'}</div>
+                                <div class="detail-value">${session.is_paused ? '<span style="color: #dc3545;">⏸️ معلقة</span>' : '<span style="color: #28a745;">▶️ نشطة</span>'}</div>
                             </div>
                             ${session.pause_reason ? `
-                            <div class="detail-item">
+                            <div class="detail-item" style="grid-column: 1 / -1;">
                                 <div class="detail-label">سبب الإيقاف</div>
-                                <div class="detail-value">${session.pause_reason}</div>
+                                <div class="detail-value" style="color: #dc3545; font-style: italic;">${session.pause_reason}</div>
                             </div>
                             ` : ''}
                         </div>
@@ -2087,7 +2110,9 @@
                     document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
                     document.getElementById('activeUsers').textContent = stats.activeUsers || 0;
                     document.getElementById('totalSessions').textContent = stats.totalSessions || 0;
-                    document.getElementById('totalSubscriptions').textContent = stats.totalSubscriptions || 0;
+                    document.getElementById('connectedSessions').textContent = stats.connectedSessions || 0;
+                    document.getElementById('totalMessages').textContent = stats.messages24h || 0;
+                    document.getElementById('apiCalls').textContent = stats.api24h || 0;
                 }
             } catch (error) {
                 console.error('Error loading stats:', error);
