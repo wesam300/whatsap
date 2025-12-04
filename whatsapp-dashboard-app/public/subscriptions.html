@@ -245,6 +245,35 @@
         let systemSettings = {};
         let selectedPackage = null;
 
+        // دالة لعرض التاريخ الميلادي بشكل صريح
+        function formatGregorianDate(dateString, includeTime = false) {
+            if (!dateString) return 'غير محدد';
+            
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'تاريخ غير صحيح';
+            
+            // استخدام en-US مع التقويم الميلادي، ثم ترجمة الأشهر للعربية
+            const day = date.getDate();
+            const month = date.getMonth();
+            const year = date.getFullYear();
+            
+            // ترجمة الأشهر للعربية
+            const monthNames = [
+                'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+                'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+            ];
+            
+            let formatted = `${day} ${monthNames[month]} ${year}`;
+            
+            if (includeTime) {
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                formatted += ` ${hours}:${minutes}`;
+            }
+            
+            return formatted;
+        }
+
         // تحميل البيانات عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', function() {
             loadPackages();
@@ -365,10 +394,10 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <p><strong>الباقة:</strong> ${subscription.package_name}</p>
-                                    <p><strong>تاريخ البداية:</strong> ${new Date(subscription.start_date).toLocaleDateString('ar-SA')}</p>
+                                    <p><strong>تاريخ البداية:</strong> ${formatGregorianDate(subscription.start_date)}</p>
                                 </div>
                                 <div class="col-md-6">
-                                    <p><strong>تاريخ الانتهاء:</strong> ${endDate.toLocaleDateString('ar-SA')}</p>
+                                    <p><strong>تاريخ الانتهاء:</strong> ${formatGregorianDate(subscription.end_date)}</p>
                                     <p><strong>الأيام المتبقية:</strong> ${daysLeft > 0 ? daysLeft : 0} يوم</p>
                                 </div>
                             </div>
@@ -421,8 +450,8 @@
             `;
 
             subscriptions.forEach(subscription => {
-                const startDate = new Date(subscription.start_date).toLocaleDateString('ar-SA');
-                const endDate = new Date(subscription.end_date).toLocaleDateString('ar-SA');
+                const startDate = formatGregorianDate(subscription.start_date);
+                const endDate = formatGregorianDate(subscription.end_date);
                 
                 let statusClass = 'badge bg-success';
                 let statusText = 'نشط';

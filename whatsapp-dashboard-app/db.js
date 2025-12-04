@@ -185,6 +185,11 @@ db.exec(`
     try {
         db.prepare('ALTER TABLE sessions ADD COLUMN pause_reason TEXT').run();
     } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة عمود timestamp للQR code
+        db.prepare('ALTER TABLE sessions ADD COLUMN qr_timestamp DATETIME').run();
+    } catch (e) { /* Column already exists */ }
 
     // إنشاء فهارس للبحث السريع
     db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)').run();

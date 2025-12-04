@@ -12,6 +12,7 @@ const fetch = require('node-fetch');
 const mime = require('mime');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
+const { destroyClientCompletely } = require('./session-manager');
 
 const router = express.Router();
 
@@ -912,6 +913,390 @@ router.get('/:apiKey/messages/:messageId', validateApiKeyMiddleware, validateSes
 });
 
 // ========================================
+// 🆕 مسارات جديدة: الرسائل الجماعية، الرسائل المستقبلة، جهات الاتصال
+// ========================================
+
+// إرسال رسائل جماعية (مع API Key في الرابط)
+router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const { to, message } = req.body;
+        const { userId, apiKeyId } = req.apiKeyInfo;
+        const { sessionId } = req.sessionTokenInfo;
+        
+        if (!to || !Array.isArray(to) || to.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'قائمة الأرقام مطلوبة ويجب أن تحتوي على رقم واحد على الأقل',
+                code: 'MISSING_PARAMETERS'
+            });
+        }
+        
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                error: 'نص الرسالة مطلوب',
+                code: 'MISSING_PARAMETERS'
+            });
+        }
+        
+        // التحقق من وجود الجلسة
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                error: 'الجلسة غير موجودة أو غير متصلة',
+                code: 'SESSION_NOT_FOUND'
+            });
+        }
+        
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
+            });
+        }
+        
+        // إرسال الرسائل
+        const results = [];
+        for (const phoneNumber of to) {
+            try {
+                const chatId = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+                const result = await client.sendMessage(chatId, message);
+                results.push({
+                    to: phoneNumber,
+                    success: true,
+                    messageId: result.id._serialized,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                results.push({
+                    to: phoneNumber,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+        
+        const responseTime = Date.now() - startTime;
+        
+        // تسجيل الطلب
+        logApiRequest(
+            userId, apiKeyId, req.sessionTokenInfo.id,
+            '/api/send-bulk-message', 'POST', 200,
+            responseTime, req.ip, req.get('User-Agent')
+        );
+        
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+        
+        res.json({
+            success: true,
+            message: `تم إرسال ${successCount} رسالة بنجاح${failCount > 0 ? ` وفشل ${failCount} رسالة` : ''}`,
+            total: to.length,
+            successCount,
+            failCount,
+            results,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        console.error('Bulk message send error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'فشل في إرسال الرسائل الجماعية',
+            details: error.message,
+            code: 'SEND_BULK_MESSAGE_FAILED'
+        });
+    }
+});
+
+// إرسال رسائل جماعية (مع API Key في الهيدر)
+router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const { to, message } = req.body;
+        const { userId, apiKeyId } = req.apiKeyInfo;
+        const { sessionId } = req.sessionTokenInfo;
+        
+        if (!to || !Array.isArray(to) || to.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'قائمة الأرقام مطلوبة ويجب أن تحتوي على رقم واحد على الأقل',
+                code: 'MISSING_PARAMETERS'
+            });
+        }
+        
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                error: 'نص الرسالة مطلوب',
+                code: 'MISSING_PARAMETERS'
+            });
+        }
+        
+        // التحقق من وجود الجلسة
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                error: 'الجلسة غير موجودة أو غير متصلة',
+                code: 'SESSION_NOT_FOUND'
+            });
+        }
+        
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
+            });
+        }
+        
+        // إرسال الرسائل
+        const results = [];
+        for (const phoneNumber of to) {
+            try {
+                const chatId = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+                const result = await client.sendMessage(chatId, message);
+                results.push({
+                    to: phoneNumber,
+                    success: true,
+                    messageId: result.id._serialized,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                results.push({
+                    to: phoneNumber,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+        
+        const responseTime = Date.now() - startTime;
+        
+        // تسجيل الطلب
+        logApiRequest(
+            userId, apiKeyId, req.sessionTokenInfo.id,
+            '/api/send-bulk-message', 'POST', 200,
+            responseTime, req.ip, req.get('User-Agent')
+        );
+        
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+        
+        res.json({
+            success: true,
+            message: `تم إرسال ${successCount} رسالة بنجاح${failCount > 0 ? ` وفشل ${failCount} رسالة` : ''}`,
+            total: to.length,
+            successCount,
+            failCount,
+            results,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        console.error('Bulk message send error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'فشل في إرسال الرسائل الجماعية',
+            details: error.message,
+            code: 'SEND_BULK_MESSAGE_FAILED'
+        });
+    }
+});
+
+// جلب الرسائل المستقبلة من رقم معين (مع API Key في الرابط)
+router.get('/:apiKey/messages-from/:phoneNumber', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    try {
+        const { sessionId } = req.sessionTokenInfo;
+        const { phoneNumber } = req.params;
+        const { limit = 50 } = req.query;
+        const lim = Math.min(parseInt(limit) || 50, 200);
+        
+        // تنظيف رقم الهاتف
+        const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+        const chatId = `${cleanPhone}@c.us`;
+        
+        // جلب الرسائل المستقبلة فقط (from_me = 0) من هذا الرقم
+        const rows = db.prepare(`
+            SELECT id, session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, sender, receiver, timestamp 
+            FROM messages 
+            WHERE session_id = ? AND chat_id = ? AND from_me = 0 
+            ORDER BY id DESC 
+            LIMIT ?
+        `).all(String(sessionId), chatId, lim);
+        
+        res.json({
+            success: true,
+            phoneNumber: cleanPhone,
+            count: rows.length,
+            messages: rows
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'فشل في جلب الرسائل',
+            details: error.message
+        });
+    }
+});
+
+// جلب الرسائل المستقبلة من رقم معين (مع API Key في الهيدر)
+router.get('/messages-from/:phoneNumber', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    try {
+        const { sessionId } = req.sessionTokenInfo;
+        const { phoneNumber } = req.params;
+        const { limit = 50 } = req.query;
+        const lim = Math.min(parseInt(limit) || 50, 200);
+        
+        // تنظيف رقم الهاتف
+        const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+        const chatId = `${cleanPhone}@c.us`;
+        
+        // جلب الرسائل المستقبلة فقط (from_me = 0) من هذا الرقم
+        const rows = db.prepare(`
+            SELECT id, session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, sender, receiver, timestamp 
+            FROM messages 
+            WHERE session_id = ? AND chat_id = ? AND from_me = 0 
+            ORDER BY id DESC 
+            LIMIT ?
+        `).all(String(sessionId), chatId, lim);
+        
+        res.json({
+            success: true,
+            phoneNumber: cleanPhone,
+            count: rows.length,
+            messages: rows
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'فشل في جلب الرسائل',
+            details: error.message
+        });
+    }
+});
+
+// جلب جهات الاتصال (مع API Key في الرابط)
+router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    try {
+        const { sessionId } = req.sessionTokenInfo;
+        
+        // التحقق من وجود الجلسة
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                error: 'الجلسة غير موجودة أو غير متصلة',
+                code: 'SESSION_NOT_FOUND'
+            });
+        }
+        
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
+            });
+        }
+        
+        // جلب جهات الاتصال
+        const contacts = await client.getContacts();
+        
+        // تنسيق البيانات
+        const formattedContacts = contacts.map(contact => ({
+            id: contact.id._serialized,
+            number: contact.id.user,
+            name: contact.pushname || contact.name || contact.id.user,
+            isUser: contact.isUser || false,
+            isMyContact: contact.isMyContact || false,
+            isGroup: contact.isGroup || false,
+            isBusiness: contact.isBusiness || false
+        }));
+        
+        res.json({
+            success: true,
+            count: formattedContacts.length,
+            contacts: formattedContacts
+        });
+        
+    } catch (error) {
+        console.error('Get contacts error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'فشل في جلب جهات الاتصال',
+            details: error.message,
+            code: 'GET_CONTACTS_FAILED'
+        });
+    }
+});
+
+// جلب جهات الاتصال (مع API Key في الهيدر)
+router.get('/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
+    try {
+        const { sessionId } = req.sessionTokenInfo;
+        
+        // التحقق من وجود الجلسة
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                error: 'الجلسة غير موجودة أو غير متصلة',
+                code: 'SESSION_NOT_FOUND'
+            });
+        }
+        
+        // التحقق من أن الجلسة جاهزة
+        if (!client.info) {
+            return res.status(400).json({
+                success: false,
+                error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
+                code: 'SESSION_NOT_READY'
+            });
+        }
+        
+        // جلب جهات الاتصال
+        const contacts = await client.getContacts();
+        
+        // تنسيق البيانات
+        const formattedContacts = contacts.map(contact => ({
+            id: contact.id._serialized,
+            number: contact.id.user,
+            name: contact.pushname || contact.name || contact.id.user,
+            isUser: contact.isUser || false,
+            isMyContact: contact.isMyContact || false,
+            isGroup: contact.isGroup || false,
+            isBusiness: contact.isBusiness || false
+        }));
+        
+        res.json({
+            success: true,
+            count: formattedContacts.length,
+            contacts: formattedContacts
+        });
+        
+    } catch (error) {
+        console.error('Get contacts error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'فشل في جلب جهات الاتصال',
+            details: error.message,
+            code: 'GET_CONTACTS_FAILED'
+        });
+    }
+});
+
+// ========================================
 // مسار اختبار بسيط
 // ========================================
 
@@ -995,14 +1380,9 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
         
         // إيقاف الجلسة الحالية إذا كانت موجودة
         if (activeClientsRef && activeClientsRef.has(sessionId)) {
-            try {
-                const currentClient = activeClientsRef.get(sessionId);
-                await currentClient.destroy();
-            } catch (destroyError) {
-                console.log('Error destroying old client:', destroyError.message);
-            } finally {
-                activeClientsRef.delete(sessionId);
-            }
+            const currentClient = activeClientsRef.get(sessionId);
+            await destroyClientCompletely(sessionId, currentClient, null);
+            activeClientsRef.delete(sessionId);
         }
         
         // إنشاء جلسة جديدة

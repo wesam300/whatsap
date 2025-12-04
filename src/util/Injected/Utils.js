@@ -640,20 +640,32 @@ exports.LoadUtils = () => {
             res.businessProfile = contact.businessProfile.serialize();
         }
 
-        res.isMe = window.Store.ContactMethods.getIsMe(contact);
-        res.isUser = window.Store.ContactMethods.getIsUser(contact);
-        res.isGroup = window.Store.ContactMethods.getIsGroup(contact);
-        res.isWAContact = window.Store.ContactMethods.getIsWAContact(contact);
-        res.isMyContact = window.Store.ContactMethods.getIsMyContact(contact);
+        // Helper function to safely get ContactMethods values with fallback
+        const safeGet = (methodName, fallback) => {
+            try {
+                if (window.Store.ContactMethods && typeof window.Store.ContactMethods[methodName] === 'function') {
+                    return window.Store.ContactMethods[methodName](contact);
+                }
+            } catch (e) {
+                // Method doesn't exist, use fallback
+            }
+            return fallback !== undefined ? fallback : false;
+        };
+
+        res.isMe = safeGet('getIsMe', contact.isMe);
+        res.isUser = safeGet('getIsUser', contact.isUser);
+        res.isGroup = safeGet('getIsGroup', contact.isGroup);
+        res.isWAContact = safeGet('getIsWAContact', contact.isWAContact);
+        res.isMyContact = safeGet('getIsMyContact', contact.isMyContact);
         res.isBlocked = contact.isContactBlocked;
-        res.userid = window.Store.ContactMethods.getUserid(contact);
-        res.isEnterprise = window.Store.ContactMethods.getIsEnterprise(contact);
-        res.verifiedName = window.Store.ContactMethods.getVerifiedName(contact);
-        res.verifiedLevel = window.Store.ContactMethods.getVerifiedLevel(contact);
-        res.statusMute = window.Store.ContactMethods.getStatusMute(contact);
-        res.name = window.Store.ContactMethods.getName(contact);
-        res.shortName = window.Store.ContactMethods.getShortName(contact);
-        res.pushname = window.Store.ContactMethods.getPushname(contact);
+        res.userid = safeGet('getUserid', contact.userid);
+        res.isEnterprise = safeGet('getIsEnterprise', contact.isEnterprise);
+        res.verifiedName = safeGet('getVerifiedName', contact.verifiedName);
+        res.verifiedLevel = safeGet('getVerifiedLevel', contact.verifiedLevel);
+        res.statusMute = safeGet('getStatusMute', contact.statusMute);
+        res.name = safeGet('getName', contact.name);
+        res.shortName = safeGet('getShortName', contact.shortName);
+        res.pushname = safeGet('getPushname', contact.pushname);
 
         return res;
     };

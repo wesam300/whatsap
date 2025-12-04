@@ -688,6 +688,161 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
                     <span class="endpoint-url">/api/{apiKey}/messages/{messageId}</span>
                 </div>
                 <p>جلب رسالة واحدة بالتفاصيل (يتضمن معلومات الميديا base64 إن وجدت).</p>
+
+                <h3>🆕 إرسال رسائل جماعية</h3>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-url">/api/{apiKey}/send-bulk-message</span>
+                </div>
+                <p>إرسال نفس الرسالة إلى عدة أرقام في طلب واحد. مفيد للإشعارات الجماعية والرسائل التسويقية.</p>
+                <div class="note" style="background: #fff3cd; border: 1px solid #ffc107; padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0;">
+                    <strong>⚠️ ملاحظة:</strong> يتم إرسال الرسائل بشكل متسلسل (واحدة تلو الأخرى) لضمان الاستقرار. قد يستغرق الأمر وقتاً أطول عند إرسال عدد كبير من الرسائل.
+                </div>
+
+                <h4>المعاملات المطلوبة:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>to</td>
+                            <td>array[string]</td>
+                            <td>قائمة أرقام الهواتف (بدون + أو @c.us)</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>message</td>
+                            <td>string</td>
+                            <td>نص الرسالة المراد إرسالها للجميع</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>مثال على الاستجابة:</h4>
+                <div class="code-block">
+{
+  "success": true,
+  "message": "تم إرسال 5 رسالة بنجاح وفشل 1 رسالة",
+  "total": 6,
+  "successCount": 5,
+  "failCount": 1,
+  "results": [
+    {
+      "to": "966501234567",
+      "success": true,
+      "messageId": "3EB0C76...",
+      "timestamp": "2024-01-01T12:00:00.000Z"
+    },
+    {
+      "to": "966501234568",
+      "success": false,
+      "error": "Number not registered"
+    }
+  ],
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
+                </div>
+
+                <h3>🆕 جلب الرسائل المستقبلة من رقم معين</h3>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/messages-from/{phoneNumber}?limit=50</span>
+                </div>
+                <p>جلب جميع الرسائل المستقبلة (الواردة) من رقم هاتف محدد. مفيد لمراجعة المحادثات مع عميل أو جهة اتصال معينة.</p>
+
+                <h4>المعاملات:</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>المعامل</th>
+                            <th>النوع</th>
+                            <th>الوصف</th>
+                            <th>مطلوب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>phoneNumber</td>
+                            <td>string</td>
+                            <td>رقم الهاتف في الرابط (بدون + أو @c.us)</td>
+                            <td class="required">نعم</td>
+                        </tr>
+                        <tr>
+                            <td>limit</td>
+                            <td>number</td>
+                            <td>عدد النتائج (افتراضي 50، حد أقصى 200)</td>
+                            <td class="optional">لا</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>مثال على الاستجابة:</h4>
+                <div class="code-block">
+{
+  "success": true,
+  "phoneNumber": "966501234567",
+  "count": 10,
+  "messages": [
+    {
+      "id": 1,
+      "session_id": "1",
+      "chat_id": "966501234567@c.us",
+      "message_id": "3EB0C76...",
+      "from_me": 0,
+      "type": "chat",
+      "body": "مرحباً، كيف يمكنني المساعدة؟",
+      "has_media": 0,
+      "timestamp": "2024-01-01T12:00:00.000Z"
+    }
+  ]
+}
+                </div>
+
+                <h3>🆕 جلب جهات الاتصال</h3>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-url">/api/{apiKey}/contacts</span>
+                </div>
+                <p>جلب قائمة بجميع جهات الاتصال في الجلسة. يتضمن معلومات مثل الاسم ورقم الهاتف ونوع الجهة (مستخدم عادي، مجموعة، عمل).</p>
+
+                <h4>مثال على الاستجابة:</h4>
+                <div class="code-block">
+{
+  "success": true,
+  "count": 150,
+  "contacts": [
+    {
+      "id": "966501234567@c.us",
+      "number": "966501234567",
+      "name": "أحمد محمد",
+      "isUser": true,
+      "isMyContact": true,
+      "isGroup": false,
+      "isBusiness": false
+    },
+    {
+      "id": "120363123456789012@g.us",
+      "number": "120363123456789012",
+      "name": "مجموعة العمل",
+      "isUser": false,
+      "isMyContact": false,
+      "isGroup": true,
+      "isBusiness": false
+    }
+  ]
+}
+                </div>
+
+                <div class="note" style="background: #e3f2fd; border: 1px solid #2196f3; padding: 0.5rem; border-radius: 4px; margin: 0.5rem 0;">
+                    <strong>💡 نصيحة:</strong> يمكنك استخدام هذا الـ endpoint للحصول على قائمة الأرقام قبل إرسال رسائل جماعية.
+                </div>
             </div>
         </div>
 
@@ -698,7 +853,7 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
 
                 <h3>مثال: إرسال رسالة نصية (الطريقة الجديدة)</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message" \
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -709,7 +864,7 @@ curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send
 
                 <h3>مثال: إرسال رسالة نصية (الطريقة القديمة)</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/send-message" \
+curl -X POST "http://srv998477.hstgr.cloud/api/send-message" \
   -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
@@ -721,7 +876,7 @@ curl -X POST "http://localhost:3000/api/send-message" \
 
                 <h3>مثال: إرسال ملف</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/send-media" \
+curl -X POST "http://srv998477.hstgr.cloud/api/send-media" \
   -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -F "to=966501234567" \
@@ -731,7 +886,7 @@ curl -X POST "http://localhost:3000/api/send-media" \
 
                 <h3>🆕 مثال: إرسال ملف من رابط مباشر (بدون حفظ)</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-media" \
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-media" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -743,7 +898,7 @@ curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send
 
                 <h3>مثال: إرسال رسالة للمجموعة</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/send-group-message" \
+curl -X POST "http://srv998477.hstgr.cloud/api/send-group-message" \
   -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
@@ -755,13 +910,13 @@ curl -X POST "http://localhost:3000/api/send-group-message" \
 
                 <h3>مثال: فحص حالة الجلسة (الطريقة الجديدة)</h3>
                 <div class="code-block">
-curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/session-status" \
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/session-status" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
                 </div>
 
                 <h3>🆕 مثال: إرسال رسالة صوتية</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-voice" \
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-voice" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -773,31 +928,54 @@ curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send
 
                 <h3>🆕 مثال: جلب الرسائل</h3>
                 <div class="code-block">
-curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages?limit=20" \
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages?limit=20" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
                 </div>
 
                 <h3>🆕 مثال: جلب رسالة واحدة</h3>
                 <div class="code-block">
-curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages/3EB0C76..." \
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages/3EB0C76..." \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
                 </div>
 
                 <h3>🆕 مثال: إعادة تشغيل الجلسة</h3>
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json"
                 </div>
 
                 <h3>🆕 مثال: Debug الجلسات</h3>
                 <div class="code-block">
-curl -X GET "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/debug-sessions"
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/debug-sessions"
+                </div>
+
+                <h3>🆕 مثال: إرسال رسائل جماعية</h3>
+                <div class="code-block">
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-bulk-message" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": ["966501234567", "966501234568", "966501234569"],
+    "message": "مرحباً! هذه رسالة جماعية من API"
+  }'
+                </div>
+
+                <h3>🆕 مثال: جلب الرسائل المستقبلة من رقم معين</h3>
+                <div class="code-block">
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages-from/966501234567?limit=20" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
+                </div>
+
+                <h3>🆕 مثال: جلب جهات الاتصال</h3>
+                <div class="code-block">
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/contacts" \
+  -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
                 </div>
 
                 <h3>مثال باستخدام JavaScript (الطريقة الجديدة)</h3>
                 <div class="code-block">
-const response = await fetch('http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message', {
+const response = await fetch('http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message', {
   method: 'POST',
   headers: {
     'X-Session-Token': 'st_xxxxxxxxxxxxxxxxxxxxxxxx',
@@ -934,10 +1112,10 @@ console.log(result);
                 
                 <div class="code-block">
 // الطريقة الجديدة (أسهل)
-POST /api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message
+POST http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/send-message
 
 // الطريقة القديمة
-POST /api/send-message
+POST http://srv998477.hstgr.cloud/api/send-message
 Headers: X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
                 </div>
 
@@ -950,7 +1128,7 @@ Headers: X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
                 </div>
                 
                 <div class="code-block">
-curl -X POST "http://localhost:3000/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
+curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/restart-session" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json"
                 </div>
