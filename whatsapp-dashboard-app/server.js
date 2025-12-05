@@ -144,8 +144,8 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
         clearTimeout(reconnectionTimers.get(String(sessionId)));
     }
 
-        const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-        if (!session) {
+                const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+                if (!session) {
         console.log(`[${sessionId}] الجلسة غير موجودة، إلغاء إعادة الاتصال`);
         return;
     }
@@ -157,7 +157,7 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
     }
 
     // التحقق من انتهاء الصلاحية
-    if (session.expires_at) {
+        if (session.expires_at) {
         const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
         if (row.expired) {
             console.log(`[${sessionId}] الجلسة منتهية الصلاحية، إلغاء إعادة الاتصال`);
@@ -997,14 +997,41 @@ app.put('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, res) 
 });
 
 // تبديل حالة تفعيل المستخدم
-app.post('/api/admin/users/:userId/toggle', requireAuth, requireAdmin, (req, res) => {
+app.post('/api/admin/users/:userId/toggle', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
-        const row = db.prepare('SELECT is_active FROM users WHERE id = ?').get(userId);
-        if (!row) return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        
+        // منع إيقاف المستخدم الحالي (الأدمن الذي يقوم بالإيقاف)
+        if (parseInt(userId) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'لا يمكنك إيقاف حسابك الخاص' });
+        }
+        
+        const row = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+        if (!row) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+        
         const newVal = row.is_active === 1 ? 0 : 1;
         db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newVal, userId);
-        res.json({ success: true, isActive: newVal === 1 });
+        
+        // إذا تم إيقاف المستخدم، إغلاق جميع جلساته النشطة
+        if (newVal === 0) {
+            const sessions = db.prepare('SELECT id FROM sessions WHERE user_id = ?').all(userId);
+            for (const session of sessions) {
+                const sessionId = String(session.id);
+                if (activeClients.has(sessionId)) {
+                    const client = activeClients.get(sessionId);
+                    await destroyClientCompletely(sessionId, client, activeClients, false);
+                }
+            }
+            // تحديث حالة الجلسات إلى disconnected
+            db.prepare('UPDATE sessions SET status = ? WHERE user_id = ?').run('disconnected', userId);
+            console.log(`✅ تم إيقاف المستخدم ${userId} (${row.username}) وإغلاق جميع جلساته من قبل الأدمن ${req.user.username}`);
+        } else {
+            console.log(`✅ تم تفعيل المستخدم ${userId} (${row.username}) من قبل الأدمن ${req.user.username}`);
+        }
+        
+        res.json({ success: true, isActive: newVal === 1, message: newVal === 1 ? 'تم تفعيل المستخدم' : 'تم إيقاف المستخدم' });
     } catch (error) {
         console.error('Error toggling user (admin):', error);
         res.status(500).json({ success: false, error: 'فشل في تحديث الحالة' });
@@ -1012,16 +1039,44 @@ app.post('/api/admin/users/:userId/toggle', requireAuth, requireAdmin, (req, res
 });
 
 // حذف مستخدم
-app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
-        const del = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-        // سيتم حذف الجلسات المرتبطة بسبب قيود العلاقات (ON DELETE CASCADE)
-        if (del.changes === 0) return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
-        // إلغاء تفعيل مفاتيح/توكنات API إن وجدت
+        
+        // منع حذف المستخدم الحالي (الأدمن الذي يقوم بالحذف)
+        if (parseInt(userId) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'لا يمكنك حذف حسابك الخاص' });
+        }
+        
+        // التحقق من وجود المستخدم
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+        
+        // إغلاق جميع الجلسات النشطة للمستخدم
+        const sessions = db.prepare('SELECT id FROM sessions WHERE user_id = ?').all(userId);
+        for (const session of sessions) {
+            const sessionId = String(session.id);
+            if (activeClients.has(sessionId)) {
+                const client = activeClients.get(sessionId);
+                await destroyClientCompletely(sessionId, client, activeClients, false);
+            }
+        }
+        
+        // إلغاء تفعيل مفاتيح/توكنات API
         try { db.prepare('UPDATE api_keys SET is_active = 0 WHERE user_id = ?').run(userId); } catch (_) {}
         try { db.prepare('UPDATE session_tokens SET is_active = 0 WHERE user_id = ?').run(userId); } catch (_) {}
-        res.json({ success: true });
+        
+        // حذف المستخدم (سيتم حذف الجلسات المرتبطة تلقائياً بسبب ON DELETE CASCADE)
+        const del = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        
+        if (del.changes === 0) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+        
+        console.log(`✅ تم حذف المستخدم ${userId} (${user.username}) من قبل الأدمن ${req.user.username}`);
+        res.json({ success: true, message: 'تم حذف المستخدم بنجاح' });
     } catch (error) {
         console.error('Error deleting user (admin):', error);
         res.status(500).json({ success: false, error: 'فشل في حذف المستخدم' });

@@ -1465,6 +1465,19 @@
         }
 
         async function toggleUserStatus(userId) {
+            const user = users.find(u => u.id === userId);
+            if (!user) {
+                showNotification('error', 'المستخدم غير موجود');
+                return;
+            }
+            
+            const action = user.is_active ? 'إيقاف' : 'تفعيل';
+            const confirmMessage = `هل أنت متأكد من ${action} المستخدم "${user.username}"؟`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
             try {
                 const response = await fetch(`/api/admin/users/${userId}/toggle`, {
                     method: 'POST'
@@ -1472,7 +1485,7 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showNotification('success', 'تم تحديث حالة المستخدم بنجاح');
+                    showNotification('success', data.message || 'تم تحديث حالة المستخدم بنجاح');
                     loadUsers();
                     loadStats();
                 } else {
@@ -1485,7 +1498,21 @@
         }
 
         async function deleteUser(userId) {
-            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟ سيتم حذف جميع جلساته أيضاً.')) {
+            const user = users.find(u => u.id === userId);
+            if (!user) {
+                showNotification('error', 'المستخدم غير موجود');
+                return;
+            }
+            
+            const confirmMessage = `هل أنت متأكد من حذف المستخدم "${user.username}"؟\n\n` +
+                `⚠️ سيتم حذف:\n` +
+                `- المستخدم نهائياً\n` +
+                `- جميع جلساته\n` +
+                `- جميع مفاتيح API الخاصة به\n` +
+                `- جميع التوكنات الخاصة به\n\n` +
+                `هذه العملية لا يمكن التراجع عنها!`;
+            
+            if (!confirm(confirmMessage)) {
                 return;
             }
 
@@ -1496,7 +1523,7 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showNotification('success', 'تم حذف المستخدم بنجاح');
+                    showNotification('success', `تم حذف المستخدم "${user.username}" بنجاح`);
                     loadUsers();
                     loadStats();
                 } else {
