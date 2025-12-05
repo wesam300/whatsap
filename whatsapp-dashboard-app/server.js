@@ -2318,33 +2318,10 @@ async function cleanupOrphanedChromeProcesses() {
         // الحصول على جميع الجلسات النشطة
         const activeSessionIds = Array.from(activeClients.keys());
         
-        if (process.platform === 'win32') {
-            // في Windows: البحث عن عمليات chrome.exe
-            try {
-                const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq chrome.exe" /FO CSV');
-                const lines = stdout.split('\n').filter(line => line.includes('chrome.exe'));
-                
-                // التحقق من العمليات المتبقية (التي لا تنتمي لجلسات نشطة)
-                // هذا مثال بسيط - يمكن تحسينه لفحص PID بشكل أدق
-                console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
-            } catch (error) {
-                // تجاهل الأخطاء في فحص العمليات
-            }
-        } else {
-            // في Linux/Mac: البحث عن عمليات chrome/chromium
-            try {
-                const { stdout } = await execAsync('ps aux | grep -i chrome | grep -v grep');
-                const lines = stdout.split('\n').filter(line => line.trim());
-                console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
-            } catch (error) {
-                // تجاهل الأخطاء في فحص العمليات
-            }
-        }
-        
         // تنظيف الجلسات التي لا تحتوي على عميل نشط ولكن حالتها "connected"
         const orphanedSessions = db.prepare(`
             SELECT id FROM sessions 
-            WHERE status = 'connected' 
+            WHERE status IN ('connected', 'authenticated', 'loading')
             AND id NOT IN (${activeSessionIds.length > 0 ? activeSessionIds.map(() => '?').join(',') : '0'})
         `).all(...activeSessionIds);
         
@@ -2354,6 +2331,87 @@ async function cleanupOrphanedChromeProcesses() {
                 const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
                 statusStmt.run('disconnected', session.id);
                 console.log(`✅ تم تحديث حالة الجلسة ${session.id} إلى disconnected`);
+            }
+        }
+        
+        // إغلاق عمليات Chrome المتبقية (التي لا تنتمي لجلسات نشطة)
+        if (process.platform === 'win32') {
+            // في Windows: البحث عن عمليات chrome.exe وإغلاقها
+            try {
+                const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq chrome.exe" /FO CSV');
+                const lines = stdout.split('\n').filter(line => 
+                    line.includes('chrome.exe') && 
+                    !line.includes('PID') &&
+                    line.trim()
+                );
+                
+                if (lines.length > 0) {
+                    console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
+                    
+                    // استخراج PIDs
+                    const pids = [];
+                    for (const line of lines) {
+                        const parts = line.split('","');
+                        if (parts.length > 1) {
+                            const pid = parts[1].replace(/"/g, '').trim();
+                            if (pid && !isNaN(pid)) {
+                                pids.push(pid);
+                            }
+                        }
+                    }
+                    
+                    // إغلاق العمليات المتبقية (فقط إذا لم تكن هناك جلسات نشطة)
+                    if (activeSessionIds.length === 0 && pids.length > 0) {
+                        console.log(`🔧 إغلاق ${pids.length} عملية Chrome متبقية...`);
+                        for (const pid of pids) {
+                            try {
+                                await execAsync(`taskkill /F /T /PID ${pid}`);
+                                console.log(`   ✅ تم إغلاق العملية ${pid}`);
+                            } catch (error) {
+                                // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // تجاهل الأخطاء في فحص العمليات
+            }
+        } else {
+            // في Linux/Mac: البحث عن عمليات chrome/chromium وإغلاقها
+            try {
+                const { stdout } = await execAsync('ps aux | grep -i chrome | grep -v grep | grep -v "cleanup"');
+                const lines = stdout.split('\n').filter(line => line.trim());
+                
+                if (lines.length > 0) {
+                    console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
+                    
+                    // استخراج PIDs
+                    const pids = [];
+                    for (const line of lines) {
+                        const parts = line.trim().split(/\s+/);
+                        if (parts.length > 1) {
+                            const pid = parts[1];
+                            if (pid && !isNaN(pid)) {
+                                pids.push(pid);
+                            }
+                        }
+                    }
+                    
+                    // إغلاق العمليات المتبقية (فقط إذا لم تكن هناك جلسات نشطة)
+                    if (activeSessionIds.length === 0 && pids.length > 0) {
+                        console.log(`🔧 إغلاق ${pids.length} عملية Chrome متبقية...`);
+                        for (const pid of pids) {
+                            try {
+                                await execAsync(`kill -9 ${pid}`);
+                                console.log(`   ✅ تم إغلاق العملية ${pid}`);
+                            } catch (error) {
+                                // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // تجاهل الأخطاء في فحص العمليات
             }
         }
         
