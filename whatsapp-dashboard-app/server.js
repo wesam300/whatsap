@@ -497,10 +497,7 @@ async function restartConnectedSessions() {
                         clientId: `session_${session.id}`,
                         dataPath: path.join(__dirname, 'sessions')
                     }),
-                    puppeteer: {
-                        headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox']
-                    }
+                    puppeteer: getPuppeteerOptions()
                 });
                 
                 activeClients.set(String(session.id), client);
@@ -1959,29 +1956,65 @@ io.on('connection', (socket) => {
                 await destroyClientCompletely(sessionId, existingClient);
             }
 
-            // إذا طُلب QR جديد أو كانت الجلسة غير متصلة، احذف بيانات الجلسة القديمة
-            if (forceNewQR || session.status === 'disconnected' || session.status === 'auth_failure') {
+            // حذف بيانات الجلسة فقط إذا طُلب QR جديد صراحة (forceNewQR = true)
+            // لا نحذف البيانات إذا كانت الجلسة متصلة سابقاً أو إذا كان مجلد الجلسة موجوداً
+            if (forceNewQR) {
                 try {
                     const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
                     const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
                     
                     if (sessionExists) {
-                        console.log(`Deleting old session data for ${sessionId} to force new QR code...`);
+                        console.log(`[${sessionId}] حذف بيانات الجلسة القديمة لطلب QR جديد...`);
                         await fs.rm(sessionPath, { recursive: true, force: true });
                     }
                 } catch (error) {
-                    console.error(`Error deleting session data: ${error.message}`);
+                    console.error(`[${sessionId}] خطأ في حذف بيانات الجلسة: ${error.message}`);
                     // لا نوقف العملية إذا فشل الحذف
+                }
+            } else if (session.status === 'auth_failure') {
+                // فقط في حالة فشل المصادقة، نحذف البيانات لإجبار QR جديد
+                try {
+                    const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+                    const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
+                    
+                    if (sessionExists) {
+                        console.log(`[${sessionId}] حذف بيانات الجلسة بسبب فشل المصادقة...`);
+                        await fs.rm(sessionPath, { recursive: true, force: true });
+                    }
+                } catch (error) {
+                    console.error(`[${sessionId}] خطأ في حذف بيانات الجلسة: ${error.message}`);
+                }
+            } else {
+                // إذا كانت الجلسة متصلة سابقاً، نحاول استخدام البيانات الموجودة
+                const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+                const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
+                
+                if (sessionExists && session.status === 'disconnected') {
+                    console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة...`);
                 }
             }
 
-            // مسح QR code القديم من قاعدة البيانات
-            const clearQRStmt = db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?');
-            clearQRStmt.run(sessionId);
-
-            // Update status to waiting for QR
-            const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-            updateStmt.run('waiting_for_qr', sessionId);
+            // التحقق من وجود بيانات الجلسة
+            const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+            const sessionDataExists = await fs.access(sessionPath).then(() => true).catch(() => false);
+            
+            // إذا كانت بيانات الجلسة موجودة ولم يُطلب QR جديد، نحاول الاتصال مباشرة
+            if (sessionDataExists && !forceNewQR && session.status !== 'auth_failure') {
+                console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة...`);
+                // لا نحذف QR code القديم، فقط نحدث الحالة
+                const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                updateStmt.run('connecting', sessionId);
+            } else {
+                // مسح QR code القديم من قاعدة البيانات فقط إذا طُلب QR جديد
+                if (forceNewQR || session.status === 'auth_failure') {
+                    const clearQRStmt = db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?');
+                    clearQRStmt.run(sessionId);
+                }
+                
+                // Update status to waiting for QR
+                const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                updateStmt.run('waiting_for_qr', sessionId);
+            }
             
             // Create WhatsApp client
             const client = new Client({
@@ -1989,10 +2022,7 @@ io.on('connection', (socket) => {
                     clientId: `session_${sessionId}`,
                     dataPath: path.join(__dirname, 'sessions')
                 }),
-                puppeteer: {
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
-                }
+                puppeteer: getPuppeteerOptions()
             });
             
             activeClients.set(String(sessionId), client);
@@ -2201,10 +2231,7 @@ io.on('connection', (socket) => {
                         clientId: `session_${sessionId}`,
                         dataPath: path.join(__dirname, 'sessions')
                     }),
-                    puppeteer: {
-                        headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox']
-                    }
+                    puppeteer: getPuppeteerOptions()
                 });
                 
                 activeClients.set(String(sessionId), client);
@@ -2316,10 +2343,7 @@ io.on('connection', (socket) => {
                         clientId: `session_${sessionId}`,
                         dataPath: path.join(__dirname, 'sessions')
                     }),
-                    puppeteer: {
-                        headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox']
-                    }
+                    puppeteer: getPuppeteerOptions()
                 });
                 
                 activeClients.set(String(sessionId), client);
@@ -2430,10 +2454,7 @@ io.on('connection', (socket) => {
                         clientId: `session_${sessionId}`,
                         dataPath: path.join(__dirname, 'sessions')
                     }),
-                    puppeteer: {
-                        headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox']
-                    }
+                    puppeteer: getPuppeteerOptions()
                 });
                 
                 activeClients.set(String(sessionId), client);
