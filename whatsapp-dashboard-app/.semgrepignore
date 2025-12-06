@@ -1,0 +1,16 @@
+# Exclude directories
+node_modules/
+public/
+sessions/
+.wwebjs_cache/
+.firebase/
+functions/
+
+# Exclude specific files with encoding issues
+*.md
+*.txt
+*.html
+*.json
+*.bat
+*.sh
+*.ps1

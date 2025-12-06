@@ -122,6 +122,143 @@ setActiveClientsRef(activeClients);
 // استيراد دالة إغلاق الجلسة من ملف مشترك
 const { destroyClientCompletely: destroyClientCompletelyBase } = require('./session-manager');
 
+// دالة مساعدة لحذف مجلد الجلسة من القرص
+async function deleteSessionFolder(sessionId) {
+    try {
+        const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+        const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
+        
+        if (sessionExists) {
+            console.log(`[${sessionId}] حذف مجلد الجلسة: ${sessionPath}`);
+            await fs.rm(sessionPath, { recursive: true, force: true, maxRetries: 5 });
+            console.log(`[${sessionId}] تم حذف مجلد الجلسة بنجاح`);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error(`[${sessionId}] خطأ في حذف مجلد الجلسة:`, error.message);
+        return false;
+    }
+}
+
+// دالة مساعدة لتنظيف الجلسات المحذوفة التي لا تزال موجودة على القرص
+async function cleanupOrphanedSessions() {
+    try {
+        const sessionsDir = path.join(__dirname, 'sessions');
+        const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
+        
+        // الحصول على جميع معرفات الجلسات من قاعدة البيانات
+        const dbSessions = db.prepare('SELECT id FROM sessions').all();
+        const validSessionIds = new Set(dbSessions.map(s => s.id));
+        
+        let cleanedCount = 0;
+        let cleanedSize = 0;
+        
+        for (const entry of entries) {
+            if (entry.isDirectory() && entry.name.startsWith('session-session_')) {
+                // استخراج معرف الجلسة من اسم المجلد
+                const match = entry.name.match(/session-session_(\d+)/);
+                if (match) {
+                    const sessionId = parseInt(match[1]);
+                    
+                    // إذا كانت الجلسة غير موجودة في قاعدة البيانات، احذفها
+                    if (!validSessionIds.has(sessionId)) {
+                        const sessionPath = path.join(sessionsDir, entry.name);
+                        try {
+                            // حساب حجم المجلد قبل الحذف
+                            const stats = await fs.stat(sessionPath);
+                            const size = await getDirectorySize(sessionPath);
+                            cleanedSize += size;
+                            
+                            console.log(`[تنظيف] حذف جلسة محذوفة: ${entry.name} (${(size / 1024 / 1024).toFixed(2)} MB)`);
+                            await fs.rm(sessionPath, { recursive: true, force: true, maxRetries: 5 });
+                            cleanedCount++;
+                        } catch (error) {
+                            console.error(`[تنظيف] خطأ في حذف ${entry.name}:`, error.message);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (cleanedCount > 0) {
+            console.log(`[تنظيف] تم تنظيف ${cleanedCount} جلسة محذوفة، تم تحرير ${(cleanedSize / 1024 / 1024).toFixed(2)} MB`);
+        }
+        
+        return { cleanedCount, cleanedSize };
+    } catch (error) {
+        console.error('[تنظيف] خطأ في تنظيف الجلسات المحذوفة:', error.message);
+        return { cleanedCount: 0, cleanedSize: 0 };
+    }
+}
+
+// دالة مساعدة لحساب حجم المجلد
+async function getDirectorySize(dirPath) {
+    let totalSize = 0;
+    try {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+            const entryPath = path.join(dirPath, entry.name);
+            if (entry.isDirectory()) {
+                totalSize += await getDirectorySize(entryPath);
+            } else {
+                try {
+                    const stats = await fs.stat(entryPath);
+                    totalSize += stats.size;
+                } catch (e) {
+                    // تجاهل الأخطاء في الوصول للملفات
+                }
+            }
+        }
+    } catch (e) {
+        // تجاهل الأخطاء
+    }
+    return totalSize;
+}
+
+// دالة مساعدة لإعداد خيارات Puppeteer لتعطيل تخزين الميديا
+function getPuppeteerOptions() {
+    return {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            // تعطيل تخزين الميديا والكاش
+            '--disable-dev-shm-usage',
+            '--disable-application-cache',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-component-update',
+            '--disable-default-apps',
+            '--disable-domain-reliability',
+            '--disable-features=TranslateUI',
+            '--disable-hang-monitor',
+            '--disable-ipc-flooding-protection',
+            '--disable-notifications',
+            '--disable-offer-store-unmasked-wallet-cards',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-renderer-backgrounding',
+            '--disable-sync',
+            '--disable-translate',
+            '--metrics-recording-only',
+            '--no-first-run',
+            '--safebrowsing-disable-auto-update',
+            '--enable-automation',
+            '--password-store=basic',
+            '--use-mock-keychain',
+            // تعطيل blob storage و IndexedDB
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=BlinkHeapDirtyFlag,BlinkHeapIncrementalMarking',
+        ],
+        // تعطيل تخزين الملفات المؤقتة
+        ignoreDefaultArgs: ['--enable-automation'],
+    };
+}
+
 // دالة مساعدة لإغلاق الجلسة بشكل كامل مع إغلاق عملية Chrome
 async function destroyClientCompletely(sessionId, client) {
     // إلغاء أي محاولات إعادة اتصال
@@ -186,10 +323,7 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
                 clientId: `session_${sessionId}`,
                 dataPath: path.join(__dirname, 'sessions')
             }),
-            puppeteer: {
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
-            }
+            puppeteer: getPuppeteerOptions()
         });
         
             activeClients.set(String(sessionId), client);
@@ -944,6 +1078,22 @@ app.post('/api/admin/cleanup-expired-sessions', requireAuth, requireAdmin, (req,
     } catch (error) {
         console.error('Error cleaning up expired sessions:', error);
         res.status(500).json({ success: false, error: 'فشل في تنظيف الجلسات المنتهية' });
+    }
+});
+
+// تنظيف الجلسات المحذوفة التي لا تزال موجودة على القرص
+app.post('/api/admin/cleanup-orphaned-sessions', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const result = await cleanupOrphanedSessions();
+        res.json({ 
+            success: true, 
+            message: `تم تنظيف ${result.cleanedCount} جلسة محذوفة، تم تحرير ${(result.cleanedSize / 1024 / 1024).toFixed(2)} MB`,
+            cleanedCount: result.cleanedCount,
+            cleanedSizeMB: (result.cleanedSize / 1024 / 1024).toFixed(2)
+        });
+    } catch (error) {
+        console.error('Error cleaning up orphaned sessions:', error);
+        res.status(500).json({ success: false, error: 'فشل في تنظيف الجلسات المحذوفة' });
     }
 });
 
@@ -1726,7 +1876,13 @@ app.delete('/api/sessions/:id', requireAuth, async (req, res) => {
         const result = stmt.run(sessionId, userId);
         
         if (result.changes > 0) {
-            res.json({ success: true });
+            // حذف مجلد الجلسة من القرص
+            await deleteSessionFolder(sessionId);
+            
+            // حذف توكنات الجلسة المرتبطة
+            deleteSessionTokenBySessionId(userId, String(sessionId));
+            
+            res.json({ success: true, message: 'تم حذف الجلسة ومجلدها بنجاح' });
         } else {
             res.status(404).json({ error: 'Session not found' });
         }
@@ -1771,7 +1927,7 @@ io.on('connection', (socket) => {
             // إذا طُلب QR جديد أو كانت الجلسة غير متصلة، احذف بيانات الجلسة القديمة
             if (forceNewQR || session.status === 'disconnected' || session.status === 'auth_failure') {
                 try {
-                    const sessionPath = path.join(__dirname, 'sessions', `session_${sessionId}`);
+                    const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
                     const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
                     
                     if (sessionExists) {
@@ -2483,11 +2639,27 @@ server.listen(PORT, async () => {
     // تنظيف الجلسات المنتهية الصلاحية
     cleanupExpiredSessions();
     
+    // تنظيف الجلسات المحذوفة التي لا تزال موجودة على القرص
+    console.log('🧹 تنظيف الجلسات المحذوفة...');
+    const cleanupResult = await cleanupOrphanedSessions();
+    if (cleanupResult.cleanedCount > 0) {
+        console.log(`✅ تم تنظيف ${cleanupResult.cleanedCount} جلسة محذوفة، تم تحرير ${(cleanupResult.cleanedSize / 1024 / 1024).toFixed(2)} MB`);
+    }
+    
     // إعادة تشغيل الجلسات المتصلة
     await restartConnectedSessions();
     
     // تنظيف الجلسات المنتهية كل ساعة
     setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+    
+    // تنظيف الجلسات المحذوفة يومياً (كل 24 ساعة)
+    setInterval(async () => {
+        console.log('🧹 تنظيف دوري للجلسات المحذوفة...');
+        const cleanupResult = await cleanupOrphanedSessions();
+        if (cleanupResult.cleanedCount > 0) {
+            console.log(`✅ تم تنظيف ${cleanupResult.cleanedCount} جلسة محذوفة، تم تحرير ${(cleanupResult.cleanedSize / 1024 / 1024).toFixed(2)} MB`);
+        }
+    }, 24 * 60 * 60 * 1000); // 24 ساعة
     
     // تنظيف العمليات المتبقية من Chrome كل 30 دقيقة
     setInterval(cleanupOrphanedChromeProcesses, 30 * 60 * 1000);
