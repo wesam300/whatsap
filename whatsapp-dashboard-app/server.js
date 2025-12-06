@@ -553,6 +553,92 @@ async function restartConnectedSessions() {
     }
 }
 
+// دالة لإعادة تشغيل الجلسات التي لديها بيانات موجودة لكن حالتها disconnected
+async function restoreDisconnectedSessionsWithData() {
+    try {
+        console.log('🔍 البحث عن جلسات منفصلة لديها بيانات موجودة...');
+        
+        // الحصول على جميع الجلسات التي حالتها disconnected
+        const disconnectedSessionsStmt = db.prepare('SELECT * FROM sessions WHERE status = ? OR status = ?');
+        const disconnectedSessions = disconnectedSessionsStmt.all('disconnected', 'connecting');
+        
+        let restoredCount = 0;
+        
+        for (const session of disconnectedSessions) {
+            try {
+                // التحقق من وجود بيانات الجلسة
+                const sessionPath = path.join(__dirname, 'sessions', `session-session_${session.id}`);
+                const sessionDataExists = await fs.access(sessionPath).then(() => true).catch(() => false);
+                
+                if (sessionDataExists) {
+                    console.log(`[${session.id}] تم العثور على بيانات الجلسة، محاولة إعادة الاتصال...`);
+                    
+                    // التحقق من انتهاء الصلاحية
+                    let shouldRestore = true;
+                    if (session.expires_at) {
+                        const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
+                        if (row.expired) {
+                            console.log(`[${session.id}] الجلسة منتهية الصلاحية، تخطي...`);
+                            shouldRestore = false;
+                        }
+                    }
+                    
+                    // التحقق من أن الجلسة ليست متوقفة
+                    if (session.is_paused === 1) {
+                        console.log(`[${session.id}] الجلسة متوقفة، تخطي...`);
+                        shouldRestore = false;
+                    }
+                    
+                    if (shouldRestore && !activeClients.has(String(session.id))) {
+                        try {
+                            const { Client, LocalAuth } = require('whatsapp-web.js');
+                            
+                            const client = new Client({
+                                authStrategy: new LocalAuth({
+                                    clientId: `session_${session.id}`,
+                                    dataPath: path.join(__dirname, 'sessions')
+                                }),
+                                puppeteer: getPuppeteerOptions()
+                            });
+                            
+                            activeClients.set(String(session.id), client);
+                            
+                            // استخدام دالة إعداد معالجات الأحداث
+                            setupClientEventHandlers(session.id, client);
+                            
+                            // تحديث الحالة إلى connecting
+                            const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                            updateStmt.run('connecting', session.id);
+                            
+                            // بدء التهيئة
+                            client.initialize();
+                            
+                            restoredCount++;
+                            
+                            // انتظار قليل بين كل جلسة
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            
+                        } catch (error) {
+                            console.error(`[${session.id}] خطأ في إعادة الاتصال:`, error.message);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`[${session.id}] خطأ في فحص الجلسة:`, error.message);
+            }
+        }
+        
+        if (restoredCount > 0) {
+            console.log(`✅ تم إعادة تشغيل ${restoredCount} جلسة منفصلة لديها بيانات موجودة`);
+        } else {
+            console.log('ℹ️ لم يتم العثور على جلسات منفصلة لديها بيانات موجودة');
+        }
+        
+    } catch (error) {
+        console.error('خطأ في استعادة الجلسات المنفصلة:', error);
+    }
+}
+
 // Authentication middleware
 const requireAuth = (req, res, next) => {
     if (req.session.userId) {
@@ -2000,15 +2086,17 @@ io.on('connection', (socket) => {
             
             // إذا كانت بيانات الجلسة موجودة ولم يُطلب QR جديد، نحاول الاتصال مباشرة
             if (sessionDataExists && !forceNewQR && session.status !== 'auth_failure') {
-                console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة...`);
-                // لا نحذف QR code القديم، فقط نحدث الحالة
+                console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة (الحالة السابقة: ${session.status})...`);
+                // تحديث الحالة إلى connecting - سيحاول Client استخدام البيانات الموجودة تلقائياً
                 const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
                 updateStmt.run('connecting', sessionId);
+                // لا نحذف QR code القديم لأنه قد لا يكون مطلوباً
             } else {
-                // مسح QR code القديم من قاعدة البيانات فقط إذا طُلب QR جديد
+                // إذا طُلب QR جديد أو فشلت المصادقة، نحذف QR القديم ونضع الحالة على waiting_for_qr
                 if (forceNewQR || session.status === 'auth_failure') {
                     const clearQRStmt = db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?');
                     clearQRStmt.run(sessionId);
+                    console.log(`[${sessionId}] طلب QR جديد (forceNewQR: ${forceNewQR}, auth_failure: ${session.status === 'auth_failure'})`);
                 }
                 
                 // Update status to waiting for QR
@@ -2704,6 +2792,10 @@ server.listen(PORT, async () => {
     
     // إعادة تشغيل الجلسات المتصلة
     await restartConnectedSessions();
+    
+    // استعادة الجلسات المنفصلة التي لديها بيانات موجودة
+    console.log('🔄 استعادة الجلسات المنفصلة التي لديها بيانات موجودة...');
+    await restoreDisconnectedSessionsWithData();
     
     // تنظيف الجلسات المنتهية كل ساعة
     setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
