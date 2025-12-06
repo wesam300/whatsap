@@ -2141,8 +2141,27 @@ io.on('connection', (socket) => {
                 
                 // Get contacts and chats
                 try {
-                const chats = await client.getChats();
-                const contacts = await client.getContacts();
+                const chats = await client.getChats().catch(err => {
+                    console.error(`[${sessionId}] خطأ في الحصول على المحادثات:`, err.message);
+                    return [];
+                });
+                
+                // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
+                let contacts = [];
+                try {
+                    contacts = await client.getContacts();
+                } catch (error) {
+                    // إذا فشل getContacts بسبب getIsMyContact، نحاول الحصول على جهات الاتصال من المحادثات
+                    console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (${error.message})، سيتم استخدام المحادثات بدلاً منها`);
+                    // استخراج جهات الاتصال من المحادثات
+                    contacts = chats
+                        .filter(chat => !chat.isGroup)
+                        .map(chat => ({
+                            id: chat.id._serialized,
+                            pushname: chat.name || chat.id.user,
+                            number: chat.id.user
+                        }));
+                }
                 
                 const sessionData = { 
                     sessionId, 
@@ -2153,8 +2172,8 @@ io.on('connection', (socket) => {
                     })),
                     contacts: contacts.map(contact => ({
                         id: contact.id._serialized,
-                        name: contact.pushname || contact.id.user,
-                        number: contact.id.user
+                        name: contact.pushname || contact.name || contact.id?.user || contact.number,
+                        number: contact.id?.user || contact.number
                     }))
                 };
                 
@@ -2164,7 +2183,7 @@ io.on('connection', (socket) => {
                 
                 socket.emit('session_data', sessionData);
                 } catch (error) {
-                    console.error(`Error getting session data for ${sessionId}:`, error);
+                    console.error(`[${sessionId}] خطأ في الحصول على بيانات الجلسة:`, error.message);
                 }
             });
             
@@ -2183,8 +2202,26 @@ io.on('connection', (socket) => {
                         return;
                     }
                     
-                    const chats = await client.getChats();
-                    const contacts = await client.getContacts();
+                    const chats = await client.getChats().catch(err => {
+                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات (authenticated fallback):`, err.message);
+                        return [];
+                    });
+                    
+                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
+                    let contacts = [];
+                    try {
+                        contacts = await client.getContacts();
+                    } catch (error) {
+                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (authenticated fallback) (${error.message})`);
+                        // استخراج جهات الاتصال من المحادثات
+                        contacts = chats
+                            .filter(chat => !chat.isGroup)
+                            .map(chat => ({
+                                id: chat.id._serialized,
+                                pushname: chat.name || chat.id.user,
+                                number: chat.id.user
+                            }));
+                    }
                     
                     const sessionData = { 
                         sessionId, 
@@ -2195,8 +2232,8 @@ io.on('connection', (socket) => {
                         })),
                         contacts: contacts.map(contact => ({
                             id: contact.id._serialized,
-                            name: contact.pushname || contact.id.user,
-                            number: contact.id.user
+                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
+                            number: contact.id?.user || contact.number
                         }))
                     };
                     
@@ -2329,8 +2366,26 @@ io.on('connection', (socket) => {
                     console.log(`Session ${sessionId} restarted successfully!`);
                     
                     // Get contacts and chats
-                    const chats = await client.getChats();
-                    const contacts = await client.getContacts();
+                    const chats = await client.getChats().catch(err => {
+                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات (authenticated fallback):`, err.message);
+                        return [];
+                    });
+                    
+                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
+                    let contacts = [];
+                    try {
+                        contacts = await client.getContacts();
+                    } catch (error) {
+                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (authenticated fallback) (${error.message})`);
+                        // استخراج جهات الاتصال من المحادثات
+                        contacts = chats
+                            .filter(chat => !chat.isGroup)
+                            .map(chat => ({
+                                id: chat.id._serialized,
+                                pushname: chat.name || chat.id.user,
+                                number: chat.id.user
+                            }));
+                    }
                     
                     const sessionData = { 
                         sessionId, 
@@ -2341,8 +2396,8 @@ io.on('connection', (socket) => {
                         })),
                         contacts: contacts.map(contact => ({
                             id: contact.id._serialized,
-                            name: contact.pushname || contact.id.user,
-                            number: contact.id.user
+                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
+                            number: contact.id?.user || contact.number
                         }))
                     };
                     

@@ -241,8 +241,33 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
         }
         
         // إرسال الرسالة
-        const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        const result = await client.sendMessage(chatId, message);
+        let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+        
+        // محاولة إرسال الرسالة
+        let result;
+        try {
+            result = await client.sendMessage(chatId, message);
+        } catch (error) {
+            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            if (error.message && error.message.includes('No LID for user')) {
+                console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                try {
+                    // محاولة الحصول على Chat باستخدام getChatById
+                    const chat = await client.getChatById(chatId);
+                    if (chat) {
+                        // إرسال الرسالة إلى Chat
+                        result = await chat.sendMessage(message);
+                    } else {
+                        throw new Error('لا يمكن العثور على المحادثة');
+                    }
+                } catch (chatError) {
+                    // إذا فشل، نرمي الخطأ الأصلي
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. قد يكون الرقم غير موجود في جهات الاتصال.`);
+                }
+            } else {
+                throw error;
+            }
+        }
         
         const responseTime = Date.now() - startTime;
         
@@ -348,8 +373,33 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
         }
         
         // إرسال الرسالة
-        const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        const result = await client.sendMessage(chatId, message);
+        let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+        
+        // محاولة إرسال الرسالة
+        let result;
+        try {
+            result = await client.sendMessage(chatId, message);
+        } catch (error) {
+            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            if (error.message && error.message.includes('No LID for user')) {
+                console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                try {
+                    // محاولة الحصول على Chat باستخدام getChatById
+                    const chat = await client.getChatById(chatId);
+                    if (chat) {
+                        // إرسال الرسالة إلى Chat
+                        result = await chat.sendMessage(message);
+                    } else {
+                        throw new Error('لا يمكن العثور على المحادثة');
+                    }
+                } catch (chatError) {
+                    // إذا فشل، نرمي الخطأ الأصلي
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. قد يكون الرقم غير موجود في جهات الاتصال.`);
+                }
+            } else {
+                throw error;
+            }
+        }
         
         const responseTime = Date.now() - startTime;
         
