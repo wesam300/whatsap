@@ -98,8 +98,43 @@ app.use(generalLimiter);
 app.use('/api', apiLimiter);
 app.options('*', cors(corsOptions));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// إعداد JSON parser مع معالجة أخطاء أفضل
+app.use(express.json({ 
+    limit: '10mb',
+    strict: false,
+    // تجاهل الأخطاء في JSON parsing للسماح بمعالجة أفضل
+    verify: (req, res, buf, encoding) => {
+        // محاولة تنظيف البيانات من الأحرف غير الصالحة
+        if (buf && buf.length) {
+            try {
+                // إزالة الأحرف غير الصالحة من JSON
+                const cleaned = buf.toString('utf8').replace(/[\x00-\x1F\x7F]/g, '');
+                req.rawBody = cleaned;
+            } catch (e) {
+                // تجاهل الأخطاء
+            }
+        }
+    }
+}));
+
+// معالجة أخطاء JSON parsing - يجب أن يكون قبل استخدام apiRoutes
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        console.error('JSON parsing error:', err.message);
+        console.error('Request URL:', req.url);
+        console.error('Request method:', req.method);
+        // محاولة إرجاع استجابة صحيحة بدلاً من تعطيل السيرفر
+        return res.status(400).json({ 
+            success: false,
+            error: 'خطأ في تنسيق JSON',
+            details: 'يرجى التحقق من صحة البيانات المرسلة'
+        });
+    }
+    // تمرير الأخطاء الأخرى للمعالج التالي
+    next(err);
+});
+
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Session configuration

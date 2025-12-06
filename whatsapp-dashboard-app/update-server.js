@@ -185,6 +185,88 @@ try {
     console.error('❌ خطأ في تحديث قاعدة البيانات:', error.message);
 }
 
+// تنظيف الجلسات المحذوفة
+console.log('\n🧹 تنظيف الجلسات المحذوفة...');
+try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const Database = require('better-sqlite3');
+    
+    // استخدام نفس مسار قاعدة البيانات
+    const dbPath = path.join(__dirname, 'sessions', 'whatsapp_dashboard.db');
+    const db = new Database(dbPath);
+    
+    const sessionsDir = path.join(__dirname, 'sessions');
+    const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
+    
+    // الحصول على جميع معرفات الجلسات من قاعدة البيانات
+    const dbSessions = db.prepare('SELECT id FROM sessions').all();
+    const validSessionIds = new Set(dbSessions.map(s => s.id));
+    
+    let cleanedCount = 0;
+    let cleanedSize = 0;
+    
+    // دالة لحساب حجم المجلد
+    async function getDirectorySize(dirPath) {
+        let totalSize = 0;
+        try {
+            const entries = await fs.readdir(dirPath, { withFileTypes: true });
+            for (const entry of entries) {
+                const entryPath = path.join(dirPath, entry.name);
+                if (entry.isDirectory()) {
+                    totalSize += await getDirectorySize(entryPath);
+                } else {
+                    try {
+                        const stats = await fs.stat(entryPath);
+                        totalSize += stats.size;
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                }
+            }
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        return totalSize;
+    }
+    
+    for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('session-session_')) {
+            // استخراج معرف الجلسة من اسم المجلد
+            const match = entry.name.match(/session-session_(\d+)/);
+            if (match) {
+                const sessionId = parseInt(match[1]);
+                
+                // إذا كانت الجلسة غير موجودة في قاعدة البيانات، احذفها
+                if (!validSessionIds.has(sessionId)) {
+                    const sessionPath = path.join(sessionsDir, entry.name);
+                    try {
+                        // حساب حجم المجلد قبل الحذف
+                        const size = await getDirectorySize(sessionPath);
+                        cleanedSize += size;
+                        
+                        console.log(`   🗑️ حذف جلسة محذوفة: ${entry.name} (${(size / 1024 / 1024).toFixed(2)} MB)`);
+                        await fs.rm(sessionPath, { recursive: true, force: true, maxRetries: 5 });
+                        cleanedCount++;
+                    } catch (error) {
+                        console.log(`   ⚠️ خطأ في حذف ${entry.name}: ${error.message}`);
+                    }
+                }
+            }
+        }
+    }
+    
+    db.close();
+    
+    if (cleanedCount > 0) {
+        console.log(`\n✅ تم تنظيف ${cleanedCount} جلسة محذوفة، تم تحرير ${(cleanedSize / 1024 / 1024).toFixed(2)} MB`);
+    } else {
+        console.log('   ℹ️ لا توجد جلسات محذوفة للتنظيف');
+    }
+} catch (error) {
+    console.log(`   ⚠️ تحذير: فشل في تنظيف الجلسات المحذوفة: ${error.message}`);
+}
+
 console.log('\n🎉 تم الانتهاء من التحديث!');
 console.log('📝 تعليمات التشغيل:');
 console.log('1. تأكد من رفع جميع الملفات المحدثة');
