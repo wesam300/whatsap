@@ -243,26 +243,32 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
         // إرسال الرسالة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         
-        // محاولة إرسال الرسالة
+        // محاولة إرسال الرسالة مباشرة - WhatsApp سينشئ Chat تلقائياً إذا لم يكن موجوداً
         let result;
         try {
             result = await client.sendMessage(chatId, message);
         } catch (error) {
-            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            // إذا كان الخطأ "No LID for user"، هذا يعني أن WhatsApp يتطلب LID
+            // نحاول الحصول على Chat أولاً (سيتم إنشاؤه تلقائياً)
             if (error.message && error.message.includes('No LID for user')) {
                 console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                
                 try {
-                    // محاولة الحصول على Chat باستخدام getChatById
+                    // محاولة الحصول على Chat - سيتم إنشاؤه تلقائياً إذا لم يكن موجوداً
                     const chat = await client.getChatById(chatId);
                     if (chat) {
-                        // إرسال الرسالة إلى Chat
+                        console.log(`[${sessionId}] تم الحصول على Chat، إرسال الرسالة...`);
                         result = await chat.sendMessage(message);
                     } else {
-                        throw new Error('لا يمكن العثور على المحادثة');
+                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
+                        console.log(`[${sessionId}] انتظار قليل ثم إعادة المحاولة...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        result = await client.sendMessage(chatId, message);
                     }
                 } catch (chatError) {
-                    // إذا فشل، نرمي الخطأ الأصلي
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. قد يكون الرقم غير موجود في جهات الاتصال.`);
+                    // إذا فشل، نرمي الخطأ الأصلي مع رسالة واضحة
+                    console.error(`[${sessionId}] فشل في إرسال الرسالة:`, chatError.message);
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
                 }
             } else {
                 throw error;
@@ -375,26 +381,32 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
         // إرسال الرسالة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         
-        // محاولة إرسال الرسالة
+        // محاولة إرسال الرسالة مباشرة - WhatsApp سينشئ Chat تلقائياً إذا لم يكن موجوداً
         let result;
         try {
             result = await client.sendMessage(chatId, message);
         } catch (error) {
-            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            // إذا كان الخطأ "No LID for user"، هذا يعني أن WhatsApp يتطلب LID
+            // نحاول الحصول على Chat أولاً (سيتم إنشاؤه تلقائياً)
             if (error.message && error.message.includes('No LID for user')) {
                 console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                
                 try {
-                    // محاولة الحصول على Chat باستخدام getChatById
+                    // محاولة الحصول على Chat - سيتم إنشاؤه تلقائياً إذا لم يكن موجوداً
                     const chat = await client.getChatById(chatId);
                     if (chat) {
-                        // إرسال الرسالة إلى Chat
+                        console.log(`[${sessionId}] تم الحصول على Chat، إرسال الرسالة...`);
                         result = await chat.sendMessage(message);
                     } else {
-                        throw new Error('لا يمكن العثور على المحادثة');
+                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
+                        console.log(`[${sessionId}] انتظار قليل ثم إعادة المحاولة...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        result = await client.sendMessage(chatId, message);
                     }
                 } catch (chatError) {
-                    // إذا فشل، نرمي الخطأ الأصلي
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. قد يكون الرقم غير موجود في جهات الاتصال.`);
+                    // إذا فشل، نرمي الخطأ الأصلي مع رسالة واضحة
+                    console.error(`[${sessionId}] فشل في إرسال الرسالة:`, chatError.message);
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
                 }
             } else {
                 throw error;
