@@ -201,6 +201,115 @@ function validateSessionTokenMiddleware(req, res, next) {
 }
 
 // ========================================
+// دالة مساعدة لإرسال الرسائل مع معالجة خطأ markedUnread
+// ========================================
+/**
+ * إرسال رسالة مع معالجة خاصة لخطأ markedUnread
+ * @param {Client} client - عميل WhatsApp
+ * @param {string} chatId - معرف المحادثة
+ * @param {string|MessageMedia} content - محتوى الرسالة
+ * @param {object} options - خيارات إضافية
+ * @returns {Promise<Message>} - الرسالة المرسلة
+ */
+async function sendMessageSafe(client, chatId, content, options = {}) {
+    try {
+        // محاولة الحصول على Chat أولاً
+        let chat;
+        try {
+            chat = await client.getChatById(chatId);
+        } catch (getChatError) {
+            // إذا فشل الحصول على Chat، نستخدم client.sendMessage مباشرة
+            console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat ${chatId}, استخدام client.sendMessage مباشرة`);
+        }
+        
+        // إذا حصلنا على Chat، استخدم chat.sendMessage (أقل عرضة لمشكلة markedUnread)
+        if (chat) {
+            try {
+                if (content instanceof MessageMedia) {
+                    return await chat.sendMessage(content, options);
+                } else {
+                    return await chat.sendMessage(content, options);
+                }
+            } catch (chatError) {
+                // إذا فشل chat.sendMessage بسبب markedUnread، جرب client.sendMessage
+                if (chatError.message && chatError.message.includes('markedUnread')) {
+                    console.warn(`[sendMessageSafe] خطأ markedUnread في chat.sendMessage, جرب client.sendMessage`);
+                    // تجاهل الخطأ ومحاولة client.sendMessage
+                } else {
+                    throw chatError;
+                }
+            }
+        }
+        
+        // استخدام client.sendMessage كحل بديل
+        // محاولة إرسال الرسالة مع معالجة خطأ markedUnread
+        try {
+            if (content instanceof MessageMedia) {
+                return await client.sendMessage(chatId, content, options);
+            } else {
+                return await client.sendMessage(chatId, content, options);
+            }
+        } catch (error) {
+            // إذا كان الخطأ متعلق بـ markedUnread، نحاول مرة أخرى بعد انتظار قصير
+            if (error.message && (error.message.includes('markedUnread') || error.message.includes('sendSeen'))) {
+                console.warn(`[sendMessageSafe] خطأ markedUnread/sendSeen, محاولة مرة أخرى بعد انتظار...`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // محاولة مرة أخرى مع الحصول على Chat أولاً
+                try {
+                    const retryChat = await client.getChatById(chatId);
+                    if (retryChat) {
+                        if (content instanceof MessageMedia) {
+                            return await retryChat.sendMessage(content, options);
+                        } else {
+                            return await retryChat.sendMessage(content, options);
+                        }
+                    }
+                } catch (retryError) {
+                    // إذا فشلت المحاولة الثانية، نرمي الخطأ الأصلي
+                    throw new Error(`فشل في إرسال الرسالة بعد محاولتين: ${error.message}`);
+                }
+            }
+            
+            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            if (error.message && error.message.includes('No LID for user')) {
+                console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                
+                try {
+                    const lidChat = await client.getChatById(chatId);
+                    if (lidChat) {
+                        console.log(`[sendMessageSafe] تم الحصول على Chat، إرسال الرسالة...`);
+                        if (content instanceof MessageMedia) {
+                            return await lidChat.sendMessage(content, options);
+                        } else {
+                            return await lidChat.sendMessage(content, options);
+                        }
+                    } else {
+                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
+                        console.log(`[sendMessageSafe] انتظار قليل ثم إعادة المحاولة...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        if (content instanceof MessageMedia) {
+                            return await client.sendMessage(chatId, content, options);
+                        } else {
+                            return await client.sendMessage(chatId, content, options);
+                        }
+                    }
+                } catch (lidError) {
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
+                }
+            }
+            
+            // إذا لم يكن الخطأ معروفاً، نرميه كما هو
+            throw error;
+        }
+    } catch (error) {
+        // معالجة نهائية للأخطاء
+        console.error(`[sendMessageSafe] خطأ في إرسال الرسالة إلى ${chatId}:`, error.message);
+        throw error;
+    }
+}
+
+// ========================================
 // مسارات إرسال الرسائل
 // ========================================
 
@@ -240,40 +349,9 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             });
         }
         
-        // إرسال الرسالة
+        // إرسال الرسالة باستخدام الدالة الآمنة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        
-        // محاولة إرسال الرسالة مباشرة - WhatsApp سينشئ Chat تلقائياً إذا لم يكن موجوداً
-        let result;
-        try {
-            result = await client.sendMessage(chatId, message);
-        } catch (error) {
-            // إذا كان الخطأ "No LID for user"، هذا يعني أن WhatsApp يتطلب LID
-            // نحاول الحصول على Chat أولاً (سيتم إنشاؤه تلقائياً)
-            if (error.message && error.message.includes('No LID for user')) {
-                console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
-                
-                try {
-                    // محاولة الحصول على Chat - سيتم إنشاؤه تلقائياً إذا لم يكن موجوداً
-                    const chat = await client.getChatById(chatId);
-                    if (chat) {
-                        console.log(`[${sessionId}] تم الحصول على Chat، إرسال الرسالة...`);
-                        result = await chat.sendMessage(message);
-                    } else {
-                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
-                        console.log(`[${sessionId}] انتظار قليل ثم إعادة المحاولة...`);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        result = await client.sendMessage(chatId, message);
-                    }
-                } catch (chatError) {
-                    // إذا فشل، نرمي الخطأ الأصلي مع رسالة واضحة
-                    console.error(`[${sessionId}] فشل في إرسال الرسالة:`, chatError.message);
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
-                }
-            } else {
-                throw error;
-            }
-        }
+        const result = await sendMessageSafe(client, chatId, message);
         
         const responseTime = Date.now() - startTime;
         
@@ -330,7 +408,7 @@ router.post('/send-voice', validateApiKeyMiddleware, validateSessionTokenMiddlew
 
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const media = new MessageMedia(mimeType, audioBase64, 'voice.ogg');
-        const result = await client.sendMessage(chatId, media, { sendAudioAsVoice: true });
+        const result = await sendMessageSafe(client, chatId, media, { sendAudioAsVoice: true });
 
         const responseTime = Date.now() - startTime;
         logApiRequest(userId, apiKeyId, req.sessionTokenInfo.id, '/api/send-voice', 'POST', 200, responseTime, req.ip, req.get('User-Agent'));
@@ -378,40 +456,9 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             });
         }
         
-        // إرسال الرسالة
+        // إرسال الرسالة باستخدام الدالة الآمنة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        
-        // محاولة إرسال الرسالة مباشرة - WhatsApp سينشئ Chat تلقائياً إذا لم يكن موجوداً
-        let result;
-        try {
-            result = await client.sendMessage(chatId, message);
-        } catch (error) {
-            // إذا كان الخطأ "No LID for user"، هذا يعني أن WhatsApp يتطلب LID
-            // نحاول الحصول على Chat أولاً (سيتم إنشاؤه تلقائياً)
-            if (error.message && error.message.includes('No LID for user')) {
-                console.warn(`[${sessionId}] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
-                
-                try {
-                    // محاولة الحصول على Chat - سيتم إنشاؤه تلقائياً إذا لم يكن موجوداً
-                    const chat = await client.getChatById(chatId);
-                    if (chat) {
-                        console.log(`[${sessionId}] تم الحصول على Chat، إرسال الرسالة...`);
-                        result = await chat.sendMessage(message);
-                    } else {
-                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
-                        console.log(`[${sessionId}] انتظار قليل ثم إعادة المحاولة...`);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        result = await client.sendMessage(chatId, message);
-                    }
-                } catch (chatError) {
-                    // إذا فشل، نرمي الخطأ الأصلي مع رسالة واضحة
-                    console.error(`[${sessionId}] فشل في إرسال الرسالة:`, chatError.message);
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
-                }
-            } else {
-                throw error;
-            }
-        }
+        const result = await sendMessageSafe(client, chatId, message);
         
         const responseTime = Date.now() - startTime;
         
@@ -498,7 +545,7 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
         
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        const result = await client.sendMessage(chatId, media, { caption: caption || '' });
+        const result = await sendMessageSafe(client, chatId, media, { caption: caption || '' });
         
         const responseTime = Date.now() - startTime;
         
@@ -585,7 +632,7 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
         
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-        const result = await client.sendMessage(chatId, media, { caption: caption || '' });
+        const result = await sendMessageSafe(client, chatId, media, { caption: caption || '' });
         
         const responseTime = Date.now() - startTime;
         
@@ -647,7 +694,7 @@ router.post('/:apiKey/send-voice', validateApiKeyMiddleware, validateSessionToke
 
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const media = new MessageMedia(mimeType, audioBase64, 'voice.ogg');
-        const result = await client.sendMessage(chatId, media, { sendAudioAsVoice: true });
+        const result = await sendMessageSafe(client, chatId, media, { sendAudioAsVoice: true });
 
         const responseTime = Date.now() - startTime;
         logApiRequest(userId, apiKeyId, req.sessionTokenInfo.id, '/api/send-voice', 'POST', 200, responseTime, req.ip, req.get('User-Agent'));
@@ -687,7 +734,7 @@ router.post('/send-group-message', validateApiKeyMiddleware, validateSessionToke
         }
         
         // إرسال الرسالة للمجموعة
-        const result = await client.sendMessage(groupId, message);
+        const result = await sendMessageSafe(client, groupId, message);
         
         const responseTime = Date.now() - startTime;
         
@@ -754,7 +801,7 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
         
         // إرسال الرسالة للمجموعة
         const chatId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
-        const result = await client.sendMessage(chatId, message);
+        const result = await sendMessageSafe(client, chatId, message);
         
         const responseTime = Date.now() - startTime;
         
@@ -1027,7 +1074,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
         for (const phoneNumber of to) {
             try {
                 const chatId = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
-                const result = await client.sendMessage(chatId, message);
+                const result = await sendMessageSafe(client, chatId, message);
                 results.push({
                     to: phoneNumber,
                     success: true,
@@ -1126,7 +1173,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
         for (const phoneNumber of to) {
             try {
                 const chatId = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
-                const result = await client.sendMessage(chatId, message);
+                const result = await sendMessageSafe(client, chatId, message);
                 results.push({
                     to: phoneNumber,
                     success: true,
