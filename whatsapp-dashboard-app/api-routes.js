@@ -212,6 +212,12 @@ function validateSessionTokenMiddleware(req, res, next) {
  * @returns {Promise<Message>} - الرسالة المرسلة
  */
 async function sendMessageSafe(client, chatId, content, options = {}) {
+    // تعطيل sendSeen لتجنب مشكلة markedUnread
+    const safeOptions = {
+        ...options,
+        sendSeen: false
+    };
+    
     try {
         // محاولة الحصول على Chat أولاً
         let chat;
@@ -222,55 +228,28 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
             console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat ${chatId}, استخدام client.sendMessage مباشرة`);
         }
         
-        // إذا حصلنا على Chat، استخدم chat.sendMessage (أقل عرضة لمشكلة markedUnread)
+        // إذا حصلنا على Chat، استخدم chat.sendMessage مع تعطيل sendSeen
         if (chat) {
             try {
                 if (content instanceof MessageMedia) {
-                    return await chat.sendMessage(content, options);
+                    return await chat.sendMessage(content, safeOptions);
                 } else {
-                    return await chat.sendMessage(content, options);
+                    return await chat.sendMessage(content, safeOptions);
                 }
             } catch (chatError) {
-                // إذا فشل chat.sendMessage بسبب markedUnread، جرب client.sendMessage
-                if (chatError.message && chatError.message.includes('markedUnread')) {
-                    console.warn(`[sendMessageSafe] خطأ markedUnread في chat.sendMessage, جرب client.sendMessage`);
-                    // تجاهل الخطأ ومحاولة client.sendMessage
-                } else {
-                    throw chatError;
-                }
+                // إذا فشل chat.sendMessage، جرب client.sendMessage
+                console.warn(`[sendMessageSafe] خطأ في chat.sendMessage: ${chatError.message}, جرب client.sendMessage`);
             }
         }
         
-        // استخدام client.sendMessage كحل بديل
-        // محاولة إرسال الرسالة مع معالجة خطأ markedUnread
+        // استخدام client.sendMessage مع تعطيل sendSeen
         try {
             if (content instanceof MessageMedia) {
-                return await client.sendMessage(chatId, content, options);
+                return await client.sendMessage(chatId, content, safeOptions);
             } else {
-                return await client.sendMessage(chatId, content, options);
+                return await client.sendMessage(chatId, content, safeOptions);
             }
         } catch (error) {
-            // إذا كان الخطأ متعلق بـ markedUnread، نحاول مرة أخرى بعد انتظار قصير
-            if (error.message && (error.message.includes('markedUnread') || error.message.includes('sendSeen'))) {
-                console.warn(`[sendMessageSafe] خطأ markedUnread/sendSeen, محاولة مرة أخرى بعد انتظار...`);
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // محاولة مرة أخرى مع الحصول على Chat أولاً
-                try {
-                    const retryChat = await client.getChatById(chatId);
-                    if (retryChat) {
-                        if (content instanceof MessageMedia) {
-                            return await retryChat.sendMessage(content, options);
-                        } else {
-                            return await retryChat.sendMessage(content, options);
-                        }
-                    }
-                } catch (retryError) {
-                    // إذا فشلت المحاولة الثانية، نرمي الخطأ الأصلي
-                    throw new Error(`فشل في إرسال الرسالة بعد محاولتين: ${error.message}`);
-                }
-            }
-            
             // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
             if (error.message && error.message.includes('No LID for user')) {
                 console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
@@ -280,18 +259,18 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
                     if (lidChat) {
                         console.log(`[sendMessageSafe] تم الحصول على Chat، إرسال الرسالة...`);
                         if (content instanceof MessageMedia) {
-                            return await lidChat.sendMessage(content, options);
+                            return await lidChat.sendMessage(content, safeOptions);
                         } else {
-                            return await lidChat.sendMessage(content, options);
+                            return await lidChat.sendMessage(content, safeOptions);
                         }
                     } else {
                         // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
                         console.log(`[sendMessageSafe] انتظار قليل ثم إعادة المحاولة...`);
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         if (content instanceof MessageMedia) {
-                            return await client.sendMessage(chatId, content, options);
+                            return await client.sendMessage(chatId, content, safeOptions);
                         } else {
-                            return await client.sendMessage(chatId, content, options);
+                            return await client.sendMessage(chatId, content, safeOptions);
                         }
                     }
                 } catch (lidError) {
