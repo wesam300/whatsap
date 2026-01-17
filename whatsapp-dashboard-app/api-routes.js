@@ -259,14 +259,26 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
                     }
                 } catch (chatError) {
                     // إذا كان الخطأ متعلق بـ detached frame، نحاول مرة أخرى
-                    if (chatError.message && chatError.message.includes('detached')) {
-                        console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame في chat.sendMessage`);
+                    const chatErrorMsg = chatError.message || chatError.toString() || '';
+                    const isDetachedFrame = chatErrorMsg.includes('detached') || 
+                                          chatErrorMsg.includes('Frame') ||
+                                          chatErrorMsg.includes('Attempted to use detached');
+                    
+                    if (isDetachedFrame) {
+                        console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame في chat.sendMessage: ${chatErrorMsg}`);
                         lastError = chatError;
                         if (attempt < maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                            const waitTime = 2000 * attempt;
+                            console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
+                            
+                            // التحقق من حالة الجلسة مرة أخرى
+                            if (!client || !client.info || client.state !== 'READY') {
+                                throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
+                            }
                             continue;
                         }
-                    } else if (chatError.message && chatError.message.includes('No LID for user')) {
+                    } else if (chatErrorMsg.includes('No LID for user')) {
                         // معالجة خطأ No LID for user
                         throw chatError;
                     } else {
@@ -285,19 +297,14 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
                     return await client.sendMessage(chatId, content, safeOptions);
                 }
             } catch (error) {
-                // إذا كان الخطأ متعلق بـ detached frame، نحاول مرة أخرى
-                if (error.message && (error.message.includes('detached') || error.message.includes('Frame'))) {
-                    console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame: ${error.message}`);
-                    lastError = error;
-                    if (attempt < maxRetries) {
-                        // انتظار متزايد قبل إعادة المحاولة
-                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                        continue;
-                    }
-                }
+                // التحقق من نوع الخطأ
+                const errorMsg = error.message || error.toString() || '';
+                const isDetachedFrame = errorMsg.includes('detached') || 
+                                       errorMsg.includes('Frame') ||
+                                       errorMsg.includes('Attempted to use detached');
                 
                 // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
-                if (error.message && error.message.includes('No LID for user')) {
+                if (errorMsg.includes('No LID for user')) {
                     console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
                     
                     try {
@@ -324,18 +331,51 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
                     }
                 }
                 
-                // إذا لم يكن الخطأ detached frame ولم تكن هناك محاولات متبقية، نرميه
-                lastError = error;
-                if (attempt === maxRetries) {
-                    throw error;
+                // إذا كان الخطأ متعلق بـ detached frame، نحاول مرة أخرى
+                if (isDetachedFrame) {
+                    console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame: ${errorMsg}`);
+                    lastError = error;
+                    if (attempt < maxRetries) {
+                        // انتظار متزايد قبل إعادة المحاولة (2 ثانية، 4 ثوانٍ، 6 ثوانٍ)
+                        const waitTime = 2000 * attempt;
+                        console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        
+                        // التحقق من حالة الجلسة مرة أخرى قبل إعادة المحاولة
+                        if (!client || !client.info || client.state !== 'READY') {
+                            throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
+                        }
+                        continue; // إعادة المحاولة
+                    }
                 }
+                
+                // إذا لم يكن الخطأ detached frame، نرميه مباشرة
+                throw error;
             }
         } catch (error) {
+            // التحقق من نوع الخطأ
+            const errorMsg = error.message || error.toString() || '';
+            const isDetachedFrame = errorMsg.includes('detached') || 
+                                   errorMsg.includes('Frame') ||
+                                   errorMsg.includes('Attempted to use detached');
+            
             // إذا كانت هذه المحاولة الأخيرة أو الخطأ ليس detached frame، نرميه
-            if (attempt === maxRetries || (error.message && !error.message.includes('detached') && !error.message.includes('Frame'))) {
+            if (attempt === maxRetries || !isDetachedFrame) {
                 throw error;
             }
             lastError = error;
+            
+            // انتظار قبل المحاولة التالية
+            if (attempt < maxRetries) {
+                const waitTime = 2000 * attempt;
+                console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                
+                // التحقق من حالة الجلسة مرة أخرى
+                if (!client || !client.info || client.state !== 'READY') {
+                    throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
+                }
+            }
         }
     }
     
