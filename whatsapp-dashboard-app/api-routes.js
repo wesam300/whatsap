@@ -218,179 +218,74 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
         sendSeen: false
     };
     
-    // التحقق من حالة العميل قبل الإرسال
-    if (!client || !client.info) {
-        throw new Error('الجلسة غير جاهزة أو غير متصلة');
-    }
-    
-    // التحقق من حالة الصفحة (إذا كانت متاحة)
-    // لا نستخدم isClosed() لأنها قد تسبب detached frame error
-    // بدلاً من ذلك، نعتمد على معالجة الأخطاء عند حدوثها
-    
-    // عدد المحاولات القصوى
-    const maxRetries = 3;
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+        // محاولة الحصول على Chat أولاً
+        let chat;
         try {
-            // التحقق من حالة العميل في كل محاولة
-            if (!client || !client.info) {
-                throw new Error('الجلسة غير جاهزة أو غير متصلة');
-            }
-            
-            // محاولة الحصول على Chat أولاً
-            let chat;
-            try {
-                chat = await client.getChatById(chatId);
-            } catch (getChatError) {
-                // إذا فشل الحصول على Chat، نستخدم client.sendMessage مباشرة
-                if (attempt === 1) {
-                    console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat ${chatId}, استخدام client.sendMessage مباشرة`);
-                }
-            }
-            
-            // إذا حصلنا على Chat، استخدم chat.sendMessage مع تعطيل sendSeen
-            if (chat) {
-                try {
-                    if (content instanceof MessageMedia) {
-                        return await chat.sendMessage(content, safeOptions);
-                    } else {
-                        return await chat.sendMessage(content, safeOptions);
-                    }
-                } catch (chatError) {
-                    // إذا كان الخطأ متعلق بـ detached frame، نحاول مرة أخرى
-                    const chatErrorMsg = chatError.message || chatError.toString() || '';
-                    const isDetachedFrame = chatErrorMsg.includes('detached') || 
-                                          chatErrorMsg.includes('Frame') ||
-                                          chatErrorMsg.includes('Attempted to use detached');
-                    
-                    if (isDetachedFrame) {
-                        console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame في chat.sendMessage: ${chatErrorMsg}`);
-                        lastError = chatError;
-                        if (attempt < maxRetries) {
-                            const waitTime = 2000 * attempt;
-                            console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
-                            await new Promise(resolve => setTimeout(resolve, waitTime));
-                            
-                            // التحقق من حالة الجلسة مرة أخرى
-                            if (!client || !client.info || client.state !== 'READY') {
-                                throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
-                            }
-                            continue;
-                        }
-                    } else if (chatErrorMsg.includes('No LID for user')) {
-                        // معالجة خطأ No LID for user
-                        throw chatError;
-                    } else {
-                        // إذا فشل chat.sendMessage لأي سبب آخر، جرب client.sendMessage
-                        console.warn(`[sendMessageSafe] خطأ في chat.sendMessage: ${chatError.message}, جرب client.sendMessage`);
-                        lastError = chatError;
-                    }
-                }
-            }
-            
-            // استخدام client.sendMessage مع تعطيل sendSeen
+            chat = await client.getChatById(chatId);
+        } catch (getChatError) {
+            // إذا فشل الحصول على Chat، نستخدم client.sendMessage مباشرة
+            console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat ${chatId}, استخدام client.sendMessage مباشرة`);
+        }
+        
+        // إذا حصلنا على Chat، استخدم chat.sendMessage مع تعطيل sendSeen
+        if (chat) {
             try {
                 if (content instanceof MessageMedia) {
-                    return await client.sendMessage(chatId, content, safeOptions);
-                } else {
-                    return await client.sendMessage(chatId, content, safeOptions);
+                    return await chat.sendMessage(content, safeOptions);
+            } else {
+                    return await chat.sendMessage(content, safeOptions);
                 }
-            } catch (error) {
-                // التحقق من نوع الخطأ
-                const errorMsg = error.message || error.toString() || '';
-                const errorStack = error.stack || '';
-                const isDetachedFrame = errorMsg.includes('detached') || 
-                                       errorMsg.includes('Frame') ||
-                                       errorMsg.includes('Attempted to use detached') ||
-                                       errorStack.includes('detached');
-                
-                // تسجيل تفصيلي للخطأ
-                console.error(`[sendMessageSafe] خطأ في إرسال الرسالة إلى ${chatId}: ${errorMsg}`);
-                
-                // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
-                if (errorMsg.includes('No LID for user')) {
-                    console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
-                    
-                    try {
-                        const lidChat = await client.getChatById(chatId);
-                        if (lidChat) {
-                            console.log(`[sendMessageSafe] تم الحصول على Chat، إرسال الرسالة...`);
-                            if (content instanceof MessageMedia) {
-                                return await lidChat.sendMessage(content, safeOptions);
-                            } else {
-                                return await lidChat.sendMessage(content, safeOptions);
-                            }
-                        } else {
-                            // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
-                            console.log(`[sendMessageSafe] انتظار قليل ثم إعادة المحاولة...`);
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                            if (content instanceof MessageMedia) {
-                                return await client.sendMessage(chatId, content, safeOptions);
-                            } else {
-                                return await client.sendMessage(chatId, content, safeOptions);
-                            }
-                        }
-                    } catch (lidError) {
-                        throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
-                    }
-                }
-                
-                // إذا كان الخطأ متعلق بـ detached frame، نحاول مرة أخرى
-                if (isDetachedFrame) {
-                    console.warn(`[sendMessageSafe] محاولة ${attempt}/${maxRetries}: خطأ detached frame: ${errorMsg}`);
-                    lastError = error;
-                    if (attempt < maxRetries) {
-                        // انتظار متزايد قبل إعادة المحاولة (2 ثانية، 4 ثوانٍ، 6 ثوانٍ)
-                        const waitTime = 2000 * attempt;
-                        console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
-                        await new Promise(resolve => setTimeout(resolve, waitTime));
-                        
-                        // التحقق من حالة الجلسة مرة أخرى قبل إعادة المحاولة
-                        if (!client || !client.info || client.state !== 'READY') {
-                            throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
-                        }
-                        continue; // إعادة المحاولة
-                    }
-                }
-                
-                // إذا لم يكن الخطأ detached frame، نرميه مباشرة
-                throw error;
-            }
-        } catch (error) {
-            // التحقق من نوع الخطأ
-            const errorMsg = error.message || error.toString() || '';
-            const isDetachedFrame = errorMsg.includes('detached') || 
-                                   errorMsg.includes('Frame') ||
-                                   errorMsg.includes('Attempted to use detached');
-            
-            // إذا كانت هذه المحاولة الأخيرة أو الخطأ ليس detached frame، نرميه
-            if (attempt === maxRetries || !isDetachedFrame) {
-                throw error;
-            }
-            lastError = error;
-            
-            // انتظار قبل المحاولة التالية
-            if (attempt < maxRetries) {
-                const waitTime = 2000 * attempt;
-                console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-                
-                // التحقق من حالة الجلسة مرة أخرى
-                if (!client || !client.info || client.state !== 'READY') {
-                    throw new Error('الجلسة لم تعد جاهزة بعد إعادة المحاولة');
-                }
+            } catch (chatError) {
+                // إذا فشل chat.sendMessage، جرب client.sendMessage
+                console.warn(`[sendMessageSafe] خطأ في chat.sendMessage: ${chatError.message}, جرب client.sendMessage`);
             }
         }
+        
+        // استخدام client.sendMessage مع تعطيل sendSeen
+        try {
+            if (content instanceof MessageMedia) {
+                return await client.sendMessage(chatId, content, safeOptions);
+        } else {
+                return await client.sendMessage(chatId, content, safeOptions);
+        }
+    } catch (error) {
+            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+            if (error.message && error.message.includes('No LID for user')) {
+                console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
+                
+                try {
+                    const lidChat = await client.getChatById(chatId);
+                    if (lidChat) {
+                        console.log(`[sendMessageSafe] تم الحصول على Chat، إرسال الرسالة...`);
+                        if (content instanceof MessageMedia) {
+                            return await lidChat.sendMessage(content, safeOptions);
+                        } else {
+                            return await lidChat.sendMessage(content, safeOptions);
+                        }
+                    } else {
+                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
+                        console.log(`[sendMessageSafe] انتظار قليل ثم إعادة المحاولة...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+                        if (content instanceof MessageMedia) {
+                            return await client.sendMessage(chatId, content, safeOptions);
+                } else {
+                            return await client.sendMessage(chatId, content, safeOptions);
+                        }
+                }
+                } catch (lidError) {
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
+            }
+            }
+            
+            // إذا لم يكن الخطأ معروفاً، نرميه كما هو
+            throw error;
+        }
+    } catch (error) {
+        // معالجة نهائية للأخطاء
+        console.error(`[sendMessageSafe] خطأ في إرسال الرسالة إلى ${chatId}:`, error.message);
+            throw error;
     }
-    
-    // إذا فشلت جميع المحاولات، نرمي آخر خطأ
-    if (lastError) {
-        console.error(`[sendMessageSafe] فشلت جميع المحاولات لإرسال الرسالة إلى ${chatId}`);
-        throw new Error(`فشل في إرسال الرسالة بعد ${maxRetries} محاولات: ${lastError.message}`);
-    }
-    
-    throw new Error('فشل في إرسال الرسالة: سبب غير معروف');
 }
 
 // ========================================
@@ -429,15 +324,6 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             return res.status(400).json({
                 success: false,
                 error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
-                code: 'SESSION_NOT_READY'
-            });
-        }
-        
-        // التحقق من حالة الجلسة (يجب أن تكون READY)
-        if (client.state !== 'READY') {
-            return res.status(400).json({
-                success: false,
-                error: `الجلسة غير جاهزة. الحالة الحالية: ${client.state}`,
                 code: 'SESSION_NOT_READY'
             });
         }
@@ -545,15 +431,6 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             return res.status(400).json({
                 success: false,
                 error: 'الجلسة غير جاهزة بعد. يرجى المحاولة لاحقاً',
-                code: 'SESSION_NOT_READY'
-            });
-        }
-        
-        // التحقق من حالة الجلسة (يجب أن تكون READY)
-        if (client.state !== 'READY') {
-            return res.status(400).json({
-                success: false,
-                error: `الجلسة غير جاهزة. الحالة الحالية: ${client.state}`,
                 code: 'SESSION_NOT_READY'
             });
         }

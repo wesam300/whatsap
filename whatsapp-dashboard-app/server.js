@@ -2728,9 +2728,21 @@ async function cleanupOrphanedChromeProcesses() {
         // الحصول على جميع الجلسات النشطة
         const activeSessionIds = Array.from(activeClients.keys());
         
-        // ملاحظة: لا نقوم بتحديث حالة الجلسات تلقائياً إلى "disconnected"
-        // الجلسات تُفصل فقط عند الضغط على "بدء" أو "حذف" يدوياً
-        // أو عند انقطاع الاتصال الفعلي (client.on('disconnected'))
+        // تنظيف الجلسات التي لا تحتوي على عميل نشط ولكن حالتها "connected"
+        const orphanedSessions = db.prepare(`
+            SELECT id FROM sessions 
+            WHERE status IN ('connected', 'authenticated', 'loading')
+            AND id NOT IN (${activeSessionIds.length > 0 ? activeSessionIds.map(() => '?').join(',') : '0'})
+        `).all(...activeSessionIds);
+        
+        if (orphanedSessions.length > 0) {
+            console.log(`🧹 تم العثور على ${orphanedSessions.length} جلسة متبقية بدون عميل نشط`);
+            for (const session of orphanedSessions) {
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('disconnected', session.id);
+                console.log(`✅ تم تحديث حالة الجلسة ${session.id} إلى disconnected`);
+            }
+        }
         
         // إغلاق عمليات Chrome المتبقية (التي لا تنتمي لجلسات نشطة)
         if (process.platform === 'win32') {
