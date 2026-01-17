@@ -299,9 +299,14 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
             } catch (error) {
                 // التحقق من نوع الخطأ
                 const errorMsg = error.message || error.toString() || '';
+                const errorStack = error.stack || '';
                 const isDetachedFrame = errorMsg.includes('detached') || 
                                        errorMsg.includes('Frame') ||
-                                       errorMsg.includes('Attempted to use detached');
+                                       errorMsg.includes('Attempted to use detached') ||
+                                       errorStack.includes('detached');
+                
+                // تسجيل تفصيلي للخطأ
+                console.error(`[sendMessageSafe] خطأ في إرسال الرسالة إلى ${chatId}: ${errorMsg}`);
                 
                 // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
                 if (errorMsg.includes('No LID for user')) {
