@@ -2698,8 +2698,44 @@ io.on('connection', (socket) => {
 });
 
 // تنظيف الجلسات المنتهية الصلاحية
-function cleanupExpiredSessions() {
+async function cleanupExpiredSessions() {
     try {
+        // الحصول على جميع الجلسات المنتهية الصلاحية التي لا تزال نشطة
+        const expiredSessions = db.prepare(`
+            SELECT id FROM sessions 
+            WHERE expires_at IS NOT NULL 
+            AND expires_at < CURRENT_TIMESTAMP 
+            AND status != 'expired'
+        `).all();
+        
+        let closedCount = 0;
+        
+        // إغلاق العملاء النشطين للجلسات المنتهية
+        for (const session of expiredSessions) {
+            const sessionId = String(session.id);
+            
+            // التحقق من وجود عميل نشط
+            if (activeClients.has(sessionId)) {
+                try {
+                    const client = activeClients.get(sessionId);
+                    console.log(`[${session.id}] إغلاق جلسة منتهية الصلاحية...`);
+                    
+                    // إزالة العميل من activeClients قبل إغلاقه
+                    activeClients.delete(sessionId);
+                    
+                    // إغلاق العميل بشكل كامل
+                    await destroyClientCompletely(session.id, client);
+                    
+                    closedCount++;
+                } catch (closeError) {
+                    console.error(`[${session.id}] خطأ في إغلاق الجلسة المنتهية:`, closeError.message);
+                    // إزالة العميل من activeClients حتى لو فشل الإغلاق
+                    activeClients.delete(sessionId);
+                }
+            }
+        }
+        
+        // تحديث حالة جميع الجلسات المنتهية في قاعدة البيانات
         const result = db.prepare(`
             UPDATE sessions 
             SET status = 'expired' 
@@ -2708,8 +2744,8 @@ function cleanupExpiredSessions() {
             AND status != 'expired'
         `).run();
         
-        if (result.changes > 0) {
-            console.log(`🧹 تم تنظيف ${result.changes} جلسة منتهية الصلاحية`);
+        if (result.changes > 0 || closedCount > 0) {
+            console.log(`🧹 تم تنظيف ${result.changes} جلسة منتهية الصلاحية (تم إغلاق ${closedCount} جلسة نشطة)`);
         }
     } catch (error) {
         console.error('خطأ في تنظيف الجلسات المنتهية:', error);
@@ -2836,7 +2872,9 @@ server.listen(PORT, async () => {
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
     
     // تنظيف الجلسات المنتهية الصلاحية
-    cleanupExpiredSessions();
+    cleanupExpiredSessions().catch(err => {
+        console.error('خطأ في تنظيف الجلسات المنتهية (بدء التشغيل):', err);
+    });
     
     // تنظيف الجلسات المحذوفة التي لا تزال موجودة على القرص
     console.log('🧹 تنظيف الجلسات المحذوفة...');
@@ -2852,8 +2890,12 @@ server.listen(PORT, async () => {
     console.log('🔄 استعادة الجلسات المنفصلة التي لديها بيانات موجودة...');
     await restoreDisconnectedSessionsWithData();
     
-    // تنظيف الجلسات المنتهية كل ساعة
-    setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+    // تنظيف الجلسات المنتهية كل 24 ساعة
+    setInterval(() => {
+        cleanupExpiredSessions().catch(err => {
+            console.error('خطأ في تنظيف الجلسات المنتهية (دوري):', err);
+        });
+    }, 24 * 60 * 60 * 1000); // 24 ساعة
     
     // تنظيف الجلسات المحذوفة يومياً (كل 24 ساعة)
     setInterval(async () => {
