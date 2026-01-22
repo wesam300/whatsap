@@ -46,6 +46,37 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// ========================================
+// Reverse Proxy Support
+// ========================================
+// هذا الإعداد ضروري عند تشغيل التطبيق خلف reverse proxy مثل Nginx أو Cloudflare
+// يسمح لـ Express بالثقة في headers مثل X-Forwarded-For و X-Forwarded-Proto
+
+// trust proxy: يمكن أن يكون:
+// - true: يثق في جميع proxies
+// - 1: يثق في أول proxy فقط
+// - 'loopback': يثق في localhost proxies فقط
+// - قائمة IPs: يثق في proxies محددة فقط
+const TRUST_PROXY = process.env.TRUST_PROXY || true;
+app.set('trust proxy', TRUST_PROXY);
+
+// إضافة headers للتعامل مع reverse proxy
+app.use((req, res, next) => {
+    // الحصول على البروتوكول الصحيح (HTTP أو HTTPS)
+    req.protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    
+    // الحصول على الـ host الصحيح
+    req.hostname = req.headers['x-forwarded-host'] || req.hostname;
+    
+    // إضافة headers للأمان والتوافق
+    res.setHeader('X-Powered-By', 'WhatsApp Dashboard');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    next();
+});
+
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
 const corsOptions = {
@@ -57,12 +88,19 @@ const corsOptions = {
 };
 
 // Rate limiting configurations
+// تم تحديث الإعدادات للعمل مع reverse proxy
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // limit each IP to 1000 requests per windowMs
     message: { error: 'تم تجاوز الحد المسموح من الطلبات، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    // استخدام IP الحقيقي من X-Forwarded-For عند العمل خلف reverse proxy
+    keyGenerator: (req) => {
+        return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.connection.remoteAddress;
+    },
+    // تخطي الطلبات من localhost في بيئة التطوير
+    skip: (req) => process.env.NODE_ENV === 'development' && (req.ip === '127.0.0.1' || req.ip === '::1'),
 });
 
 const apiLimiter = rateLimit({
@@ -71,6 +109,9 @@ const apiLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من طلبات API، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+        return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.connection.remoteAddress;
+    },
 });
 
 const messageLimiter = rateLimit({
@@ -79,6 +120,9 @@ const messageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+        return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.connection.remoteAddress;
+    },
 });
 
 const dailyMessageLimiter = rateLimit({
@@ -87,6 +131,9 @@ const dailyMessageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية، يرجى المحاولة غداً' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+        return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.connection.remoteAddress;
+    },
 });
 
 
@@ -138,12 +185,84 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Session configuration
-app.use(session({
+// تم تحديث الإعدادات للعمل مع reverse proxy و HTTPS
+const isProduction = process.env.NODE_ENV === 'production';
+const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
-}));
+    cookie: { 
+        // في الإنتاج مع HTTPS، يجب أن يكون secure: true
+        // مع reverse proxy، نستخدم 'auto' للسماح لـ Express بتحديد ذلك بناءً على trust proxy
+        secure: isProduction ? 'auto' : false,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        // SameSite للحماية من CSRF
+        sameSite: isProduction ? 'lax' : 'lax',
+        // httpOnly لمنع الوصول من JavaScript
+        httpOnly: true,
+    },
+    // اسم الـ cookie
+    name: 'whatsapp.sid',
+    // Proxy trust - مهم للعمل مع reverse proxy
+    proxy: true,
+};
+
+app.use(session(sessionConfig));
+
+// ========================================
+// Health Check & Proxy Status Endpoints
+// ========================================
+// endpoint للتحقق من حالة الخادم و reverse proxy
+
+// Health check بسيط
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+    });
+});
+
+// فحص تفصيلي لحالة reverse proxy
+app.get('/proxy-status', (req, res) => {
+    const proxyInfo = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        connection: {
+            // IP الحقيقي للعميل (بعد trust proxy)
+            clientIp: req.ip,
+            // IP من X-Forwarded-For header
+            forwardedFor: req.headers['x-forwarded-for'] || 'غير موجود',
+            // البروتوكول المستخدم
+            protocol: req.protocol,
+            // البروتوكول من X-Forwarded-Proto
+            forwardedProto: req.headers['x-forwarded-proto'] || 'غير موجود',
+            // الـ host
+            host: req.hostname,
+            // الـ host من X-Forwarded-Host
+            forwardedHost: req.headers['x-forwarded-host'] || 'غير موجود',
+            // هل الاتصال آمن
+            secure: req.secure,
+            // معلومات الاتصال الأصلي
+            originalUrl: req.originalUrl,
+            baseUrl: req.baseUrl,
+        },
+        headers: {
+            // headers مهمة للـ reverse proxy
+            'x-forwarded-for': req.headers['x-forwarded-for'] || null,
+            'x-forwarded-proto': req.headers['x-forwarded-proto'] || null,
+            'x-forwarded-host': req.headers['x-forwarded-host'] || null,
+            'x-real-ip': req.headers['x-real-ip'] || null,
+            'x-forwarded-port': req.headers['x-forwarded-port'] || null,
+            'host': req.headers['host'] || null,
+        },
+        server: {
+            trustProxy: app.get('trust proxy'),
+            nodeEnv: process.env.NODE_ENV || 'development',
+        }
+    };
+    
+    res.status(200).json(proxyInfo);
+});
 
 // Store active WhatsApp clients
 const activeClients = new Map();
