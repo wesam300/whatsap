@@ -24,52 +24,63 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
         // محاولة إغلاق العميل
         try {
             // الحصول على المتصفح من العميل إذا كان متاحاً
-            const puppeteerBrowser = client.pupBrowser || null;
+            const puppeteerBrowser = client.pupBrowser || client.pupPage?.browser() || null;
             
             // إغلاق المتصفح أولاً إذا كان متاحاً
             if (puppeteerBrowser) {
                 try {
+                    // الحصول على جميع الصفحات وإغلاقها
+                    const pages = await puppeteerBrowser.pages();
+                    for (const page of pages) {
+                        try {
+                            await page.close();
+                        } catch (pageError) {
+                            // تجاهل أخطاء إغلاق الصفحات
+                        }
+                    }
+                    
+                    // إغلاق المتصفح
                     await puppeteerBrowser.close();
                     console.log(`[${sessionId}] تم إغلاق المتصفح بنجاح`);
+                    
+                    // انتظار قليل للتأكد من إغلاق المتصفح
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (browserError) {
                     console.error(`[${sessionId}] خطأ في إغلاق المتصفح:`, browserError.message);
                 }
             }
             
             // إغلاق العميل
-            await client.destroy();
-            
-            console.log(`[${sessionId}] تم إغلاق العميل بنجاح`);
+            try {
+                await client.destroy();
+                console.log(`[${sessionId}] تم إغلاق العميل بنجاح`);
+            } catch (destroyError) {
+                console.error(`[${sessionId}] خطأ في إغلاق العميل:`, destroyError.message);
+            }
         } catch (destroyError) {
             console.error(`[${sessionId}] خطأ في إغلاق العميل:`, destroyError.message);
             
             // محاولة إجبار الإغلاق
             try {
                 // الحصول على PID من المتصفح إذا كان متاحاً
-                if (client.pupBrowser && client.pupBrowser.process) {
-                    const pid = client.pupBrowser.process().pid;
+                const puppeteerBrowser = client.pupBrowser || client.pupPage?.browser() || null;
+                if (puppeteerBrowser && puppeteerBrowser.process) {
+                    const pid = puppeteerBrowser.process().pid;
                     if (pid) {
                         console.log(`[${sessionId}] محاولة إغلاق عملية Chrome بقوة (PID: ${pid})`);
-                        // في Windows
-                        if (process.platform === 'win32') {
-                            const { exec } = require('child_process');
-                            exec(`taskkill /F /T /PID ${pid}`, (error) => {
-                                if (error) {
-                                    console.error(`[${sessionId}] فشل في إغلاق العملية:`, error.message);
-                                } else {
-                                    console.log(`[${sessionId}] تم إغلاق العملية بنجاح`);
-                                }
-                            });
-                        } else {
-                            // في Linux/Mac
-                            const { exec } = require('child_process');
-                            exec(`kill -9 ${pid}`, (error) => {
-                                if (error) {
-                                    console.error(`[${sessionId}] فشل في إغلاق العملية:`, error.message);
-                                } else {
-                                    console.log(`[${sessionId}] تم إغلاق العملية بنجاح`);
-                                }
-                            });
+                        const { exec } = require('child_process');
+                        const { promisify } = require('util');
+                        const execAsync = promisify(exec);
+                        
+                        try {
+                            if (process.platform === 'win32') {
+                                await execAsync(`taskkill /F /T /PID ${pid}`);
+                            } else {
+                                await execAsync(`kill -9 ${pid}`);
+                            }
+                            console.log(`[${sessionId}] تم إغلاق العملية بنجاح`);
+                        } catch (killError) {
+                            console.error(`[${sessionId}] فشل في إغلاق العملية:`, killError.message);
                         }
                     }
                 }

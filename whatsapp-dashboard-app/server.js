@@ -310,26 +310,27 @@ async function destroyClientCompletely(sessionId, client) {
 }
 
 // دالة لإعادة الاتصال التلقائي عند انقطاع الجلسة
-async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
+async function attemptReconnection(sessionId, maxRetries = 3, delay = 10000) {
     // إلغاء أي محاولة إعادة اتصال سابقة
     if (reconnectionTimers.has(String(sessionId))) {
         clearTimeout(reconnectionTimers.get(String(sessionId)));
+        reconnectionTimers.delete(String(sessionId));
     }
 
-                const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-                if (!session) {
+    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+    if (!session) {
         console.log(`[${sessionId}] الجلسة غير موجودة، إلغاء إعادة الاتصال`);
         return;
     }
 
     // عدم إعادة الاتصال إذا كانت الجلسة متوقفة أو منتهية
-    if (session.status === 'disconnected' || session.status === 'expired' || session.is_paused === 1) {
+    if (session.status === 'expired' || session.is_paused === 1) {
         console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إلغاء إعادة الاتصال`);
         return;
     }
 
     // التحقق من انتهاء الصلاحية
-        if (session.expires_at) {
+    if (session.expires_at) {
         const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
         if (row.expired) {
             console.log(`[${sessionId}] الجلسة منتهية الصلاحية، إلغاء إعادة الاتصال`);
@@ -340,6 +341,20 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
     let retryCount = 0;
     
     const reconnect = async () => {
+        // التحقق مرة أخرى من حالة الجلسة قبل المحاولة
+        const sessionRecheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        if (!sessionRecheck) {
+            console.log(`[${sessionId}] الجلسة غير موجودة، إلغاء إعادة الاتصال`);
+            reconnectionTimers.delete(String(sessionId));
+            return;
+        }
+        
+        if (sessionRecheck.is_paused === 1 || sessionRecheck.status === 'expired') {
+            console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إلغاء إعادة الاتصال`);
+            reconnectionTimers.delete(String(sessionId));
+            return;
+        }
+        
         if (activeClients.has(String(sessionId))) {
             console.log(`[${sessionId}] الجلسة نشطة بالفعل، إلغاء إعادة الاتصال`);
             reconnectionTimers.delete(String(sessionId));
@@ -350,17 +365,20 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
         console.log(`[${sessionId}] محاولة إعادة الاتصال (${retryCount}/${maxRetries})...`);
 
         try {
-        const { Client, LocalAuth } = require('whatsapp-web.js');
-        const path = require('path');
-        
-        const client = new Client({
-            authStrategy: new LocalAuth({
-                clientId: `session_${sessionId}`,
-                dataPath: path.join(__dirname, 'sessions')
-            }),
-            puppeteer: getPuppeteerOptions()
-        });
-        
+            // انتظار إضافي للتأكد من إغلاق المتصفح السابق
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const { Client, LocalAuth } = require('whatsapp-web.js');
+            const path = require('path');
+            
+            const client = new Client({
+                authStrategy: new LocalAuth({
+                    clientId: `session_${sessionId}`,
+                    dataPath: path.join(__dirname, 'sessions')
+                }),
+                puppeteer: getPuppeteerOptions()
+            });
+            
             activeClients.set(String(sessionId), client);
             
             // إعداد معالجات الأحداث
@@ -373,6 +391,11 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
         } catch (error) {
             console.error(`[${sessionId}] فشل إعادة الاتصال:`, error.message);
             
+            // إزالة العميل من activeClients في حالة الفشل
+            if (activeClients.has(String(sessionId))) {
+                activeClients.delete(String(sessionId));
+            }
+            
             if (retryCount < maxRetries) {
                 const timer = setTimeout(reconnect, delay);
                 reconnectionTimers.set(String(sessionId), timer);
@@ -380,13 +403,14 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
                 console.log(`[${sessionId}] تم استنفاد محاولات إعادة الاتصال`);
                 reconnectionTimers.delete(String(sessionId));
             
-            // تحديث الحالة في قاعدة البيانات
-            const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                // تحديث الحالة في قاعدة البيانات
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
                 statusStmt.run('disconnected', sessionId);
             }
         }
     };
 
+    // تأخير أولي أطول للتأكد من إغلاق المتصفح السابق
     const timer = setTimeout(reconnect, delay);
     reconnectionTimers.set(String(sessionId), timer);
 }
@@ -415,9 +439,26 @@ function setupClientEventHandlers(sessionId, client) {
         
         client.on('disconnected', async (reason) => {
         console.log(`[${sessionId}] انقطاع الاتصال - السبب: ${reason}`);
+        
+        // التحقق من حالة الجلسة في قاعدة البيانات قبل الإغلاق
+        const sessionCheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        if (!sessionCheck) {
+            console.log(`[${sessionId}] الجلسة غير موجودة في قاعدة البيانات، إلغاء المعالجة`);
+            return;
+        }
+        
+        // إذا كانت الجلسة متوقفة أو منتهية، لا نحاول إعادة الاتصال
+        if (sessionCheck.is_paused === 1 || sessionCheck.status === 'expired') {
+            console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إلغاء إعادة الاتصال`);
+            await destroyClientCompletely(sessionId, client);
+            return;
+        }
             
         // إغلاق العميل بشكل كامل
         await destroyClientCompletely(sessionId, client);
+        
+        // انتظار قليل للتأكد من إغلاق المتصفح بشكل كامل
+        await new Promise(resolve => setTimeout(resolve, 3000));
             
             // تحديث الحالة في قاعدة البيانات
             const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
@@ -425,10 +466,16 @@ function setupClientEventHandlers(sessionId, client) {
             
         io.emit('session_disconnected', { sessionId, reason });
         
-        // محاولة إعادة الاتصال تلقائياً (فقط إذا لم يكن السبب LOGGED_OUT)
+        // محاولة إعادة الاتصال تلقائياً (فقط إذا لم يكن السبب LOGGED_OUT أو NAVIGATION)
         if (reason !== 'LOGGED_OUT' && reason !== 'NAVIGATION') {
-            console.log(`[${sessionId}] محاولة إعادة الاتصال تلقائياً...`);
-            await attemptReconnection(sessionId, 3, 5000);
+            // التحقق مرة أخرى من حالة الجلسة قبل إعادة الاتصال
+            const sessionRecheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+            if (sessionRecheck && sessionRecheck.is_paused !== 1 && sessionRecheck.status !== 'expired') {
+                console.log(`[${sessionId}] محاولة إعادة الاتصال تلقائياً بعد ${3000}ms...`);
+                await attemptReconnection(sessionId, 3, 10000); // زيادة التأخير إلى 10 ثوان
+            } else {
+                console.log(`[${sessionId}] تم إلغاء إعادة الاتصال - الجلسة متوقفة أو منتهية`);
+            }
         } else {
             console.log(`[${sessionId}] لا يمكن إعادة الاتصال - السبب: ${reason}`);
         }
@@ -2702,7 +2749,7 @@ async function cleanupExpiredSessions() {
     try {
         // الحصول على جميع الجلسات المنتهية الصلاحية التي لا تزال نشطة
         const expiredSessions = db.prepare(`
-            SELECT id FROM sessions 
+            SELECT id, is_paused FROM sessions 
             WHERE expires_at IS NOT NULL 
             AND expires_at < CURRENT_TIMESTAMP 
             AND status != 'expired'
@@ -2712,6 +2759,12 @@ async function cleanupExpiredSessions() {
         
         // إغلاق العملاء النشطين للجلسات المنتهية
         for (const session of expiredSessions) {
+            // تخطي الجلسات المتوقفة (قد يرغب المستخدم في تمديدها لاحقاً)
+            if (session.is_paused === 1) {
+                console.log(`[${session.id}] تخطي جلسة منتهية الصلاحية متوقفة`);
+                continue;
+            }
+            
             const sessionId = String(session.id);
             
             // التحقق من وجود عميل نشط
@@ -2727,6 +2780,9 @@ async function cleanupExpiredSessions() {
                     await destroyClientCompletely(session.id, client);
                     
                     closedCount++;
+                    
+                    // انتظار قليل بين كل جلسة
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (closeError) {
                     console.error(`[${session.id}] خطأ في إغلاق الجلسة المنتهية:`, closeError.message);
                     // إزالة العميل من activeClients حتى لو فشل الإغلاق
@@ -2735,13 +2791,14 @@ async function cleanupExpiredSessions() {
             }
         }
         
-        // تحديث حالة جميع الجلسات المنتهية في قاعدة البيانات
+        // تحديث حالة جميع الجلسات المنتهية في قاعدة البيانات (باستثناء المتوقفة)
         const result = db.prepare(`
             UPDATE sessions 
             SET status = 'expired' 
             WHERE expires_at IS NOT NULL 
             AND expires_at < CURRENT_TIMESTAMP 
             AND status != 'expired'
+            AND is_paused = 0
         `).run();
         
         if (result.changes > 0 || closedCount > 0) {
@@ -2765,18 +2822,32 @@ async function cleanupOrphanedChromeProcesses() {
         const activeSessionIds = Array.from(activeClients.keys());
         
         // تنظيف الجلسات التي لا تحتوي على عميل نشط ولكن حالتها "connected"
+        // فقط إذا كانت الجلسة غير متوقفة وغير منتهية الصلاحية
         const orphanedSessions = db.prepare(`
-            SELECT id FROM sessions 
+            SELECT id, is_paused, expires_at FROM sessions 
             WHERE status IN ('connected', 'authenticated', 'loading')
             AND id NOT IN (${activeSessionIds.length > 0 ? activeSessionIds.map(() => '?').join(',') : '0'})
+            AND is_paused = 0
         `).all(...activeSessionIds);
         
         if (orphanedSessions.length > 0) {
             console.log(`🧹 تم العثور على ${orphanedSessions.length} جلسة متبقية بدون عميل نشط`);
             for (const session of orphanedSessions) {
-                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                statusStmt.run('disconnected', session.id);
-                console.log(`✅ تم تحديث حالة الجلسة ${session.id} إلى disconnected`);
+                // التحقق من انتهاء الصلاحية قبل تحديث الحالة
+                let shouldUpdate = true;
+                if (session.expires_at) {
+                    const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
+                    if (row.expired) {
+                        shouldUpdate = false;
+                        console.log(`[${session.id}] الجلسة منتهية الصلاحية، سيتم تحديثها لاحقاً في cleanupExpiredSessions`);
+                    }
+                }
+                
+                if (shouldUpdate) {
+                    const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                    statusStmt.run('disconnected', session.id);
+                    console.log(`✅ تم تحديث حالة الجلسة ${session.id} إلى disconnected`);
+                }
             }
         }
         
