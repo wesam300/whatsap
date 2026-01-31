@@ -261,13 +261,27 @@ async function cleanupSessionFolder(sessionId) {
     try {
         const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
         const lockFile = path.join(sessionPath, 'SingletonLock');
+        const cookieFile = path.join(sessionPath, 'SingletonCookie');
 
-        // محاولة حذف ملف القفل أولاً
+        // محاولة حذف ملف القفل
         try {
             await fs.unlink(lockFile);
-            console.log(`[${sessionId}] تم حذف ملف القفل`);
+            console.log(`[${sessionId}] تم حذف ملف القفل (SingletonLock)`);
         } catch (e) {
-            // ملف القفل غير موجود
+            if (e.code !== 'ENOENT') {
+                console.warn(`[${sessionId}] تعذر حذف SingletonLock: ${e.message}`);
+                // في حالة فشل الحذف (مثل EBUSY)، قد نحتاج للانتظار قليلاً أو محاولة قتله مرة أخرى
+            }
+        }
+
+        // محاولة حذف ملف الكوكيز (أحياناً يسبب مشاكل)
+        try {
+            await fs.unlink(cookieFile);
+            console.log(`[${sessionId}] تم حذف ملف القفل (SingletonCookie)`);
+        } catch (e) {
+            if (e.code !== 'ENOENT') {
+                // تجاهل أخطاء عدم الوجود
+            }
         }
 
         return true;
@@ -2979,6 +2993,49 @@ async function cleanupOrphanedChromeProcesses() {
 }
 
 const PORT = process.env.PORT || 3000;
+
+// معالجة إغلاق الخادم بشكل نظيف (Graceful Shutdown)
+async function gracefulShutdown(signal) {
+    console.log(`\n🏴 تلقي إشارة ${signal}، بدء إغلاق الخادم...`);
+
+    // إيقاف استقبال اتصالات جديدة إذا أمكن (server.close)
+    if (server) {
+        server.close(() => {
+            console.log('🛑 تم إغلاق خادم HTTP');
+        });
+    }
+
+    // إغلاق جميع الجلسات النشطة
+    if (activeClients.size > 0) {
+        console.log(`🔌 إغلاق ${activeClients.size} جلسة نشطة...`);
+        const closePromises = [];
+
+        for (const [sessionId, client] of activeClients.entries()) {
+            closePromises.push(destroyClientCompletely(sessionId, client));
+        }
+
+        try {
+            // انتظار إغلاق جميع الجلسات (بحد أقصى 10 ثواني)
+            await Promise.race([
+                Promise.all(closePromises),
+                new Promise(resolve => setTimeout(resolve, 10000))
+            ]);
+            console.log('✅ تم إغلاق جميع الجلسات');
+        } catch (error) {
+            console.error('⚠️ خطأ أثناء إغلاق الجلسات:', error.message);
+        }
+    } else {
+        console.log('✨ لا توجد جلسات نشطة للإغلاق');
+    }
+
+    console.log('👋 وداعاً!');
+    process.exit(0);
+}
+
+// تسجيل معالجات الإشارات
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
