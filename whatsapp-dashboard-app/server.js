@@ -46,8 +46,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Trust proxy (لإصلاح مشكلة express-rate-limit)
-app.set('trust proxy', true);
+// Trust proxy (لإصلاح مشكلة express-rate-limit) - استخدام إعداد محدود بدلاً من true
+// إذا كان السيرفر خلف proxy (مثل nginx)، استخدم: app.set('trust proxy', 1)
+// إذا لم يكن خلف proxy، استخدم: app.set('trust proxy', false)
+// هنا نستخدم false لتجنب مشاكل الأمان مع rate limiting
+app.set('trust proxy', false);
 
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
@@ -60,12 +63,14 @@ const corsOptions = {
 };
 
 // Rate limiting configurations
+// تعطيل التحقق من trust proxy لتجنب الأخطاء
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // limit each IP to 1000 requests per windowMs
     message: { error: 'تم تجاوز الحد المسموح من الطلبات، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 const apiLimiter = rateLimit({
@@ -74,6 +79,7 @@ const apiLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من طلبات API، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 const messageLimiter = rateLimit({
@@ -82,6 +88,7 @@ const messageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 const dailyMessageLimiter = rateLimit({
@@ -90,6 +97,7 @@ const dailyMessageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية، يرجى المحاولة غداً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 

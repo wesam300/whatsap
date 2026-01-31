@@ -25,6 +25,7 @@ const messageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة (60 رسالة)، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 const dailyMessageLimiter = rateLimit({
@@ -33,6 +34,7 @@ const dailyMessageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية (10,000 رسالة)، يرجى المحاولة غداً' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // تعطيل التحقق من trust proxy
 });
 
 // Ensure preflight CORS succeeds for all API endpoints (especially multipart ones)
