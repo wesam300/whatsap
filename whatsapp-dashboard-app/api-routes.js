@@ -65,7 +65,7 @@ const upload = multer({
             'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'text/plain', 'text/csv'
         ];
-        
+
         if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
@@ -115,7 +115,7 @@ async function downloadFileToMemory(url, maxBytes = 16 * 1024 * 1024) {
                         const u = new URL(url);
                         const base = u.pathname.split('/').filter(Boolean).pop();
                         if (base) filename = base;
-                    } catch (_) {}
+                    } catch (_) { }
                 }
                 // إلحاق امتداد مناسب إن لم يوجد
                 if (!filename.includes('.') && contentType) {
@@ -139,7 +139,7 @@ async function downloadFileToMemory(url, maxBytes = 16 * 1024 * 1024) {
 function validateApiKeyMiddleware(req, res, next) {
     // البحث عن API Key في الرابط أولاً، ثم في الهيدر، ثم في query
     const apiKey = req.params.apiKey || req.headers['x-api-key'] || req.query.api_key;
-    
+
     if (!apiKey) {
         return res.status(401).json({
             success: false,
@@ -147,7 +147,7 @@ function validateApiKeyMiddleware(req, res, next) {
             code: 'MISSING_API_KEY'
         });
     }
-    
+
     const validation = validateApiKey(apiKey);
     if (!validation.valid) {
         return res.status(401).json({
@@ -156,14 +156,14 @@ function validateApiKeyMiddleware(req, res, next) {
             code: 'INVALID_API_KEY'
         });
     }
-    
+
     // تحقق من أن المستخدم نشط
     try {
         const row = db.prepare('SELECT is_active FROM users WHERE id = ?').get(validation.userId);
         if (!row || row.is_active !== 1) {
             return res.status(403).json({ success: false, error: 'تم إيقاف المستخدم من قبل الإدارة', code: 'USER_SUSPENDED' });
         }
-    } catch (_) {}
+    } catch (_) { }
 
     req.apiKeyInfo = {
         ...validation,
@@ -175,7 +175,7 @@ function validateApiKeyMiddleware(req, res, next) {
 // التحقق من توكن الجلسة
 function validateSessionTokenMiddleware(req, res, next) {
     const sessionToken = req.headers['x-session-token'] || req.query.session_token;
-    
+
     if (!sessionToken) {
         return res.status(401).json({
             success: false,
@@ -183,7 +183,7 @@ function validateSessionTokenMiddleware(req, res, next) {
             code: 'MISSING_SESSION_TOKEN'
         });
     }
-    
+
     const validation = validateSessionToken(sessionToken);
     if (!validation.valid) {
         return res.status(401).json({
@@ -192,7 +192,7 @@ function validateSessionTokenMiddleware(req, res, next) {
             code: 'INVALID_SESSION_TOKEN'
         });
     }
-    
+
     req.sessionTokenInfo = {
         ...validation,
         id: validation.id
@@ -211,81 +211,90 @@ function validateSessionTokenMiddleware(req, res, next) {
  * @param {object} options - خيارات إضافية
  * @returns {Promise<Message>} - الرسالة المرسلة
  */
-async function sendMessageSafe(client, chatId, content, options = {}) {
-    // تعطيل sendSeen لتجنب مشكلة markedUnread
+async function sendMessageSafe(client, chatId, content, options = {}, maxRetries = 3) {
     const safeOptions = {
         ...options,
         sendSeen: false
     };
-    
+
+    // فحص حالة العميل
+    if (!client || !client.pupPage) {
+        throw new Error('العميل غير متاح أو المتصفح مغلق');
+    }
+
+    // فحص أن الصفحة ليست مغلقة
     try {
-        // محاولة الحصول على Chat أولاً
-        let chat;
-        try {
-            chat = await client.getChatById(chatId);
-        } catch (getChatError) {
-            // إذا فشل الحصول على Chat، نستخدم client.sendMessage مباشرة
-            console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat ${chatId}, استخدام client.sendMessage مباشرة`);
+        if (client.pupPage.isClosed()) {
+            throw new Error('صفحة المتصفح مغلقة');
         }
-        
-        // إذا حصلنا على Chat، استخدم chat.sendMessage مع تعطيل sendSeen
-        if (chat) {
+    } catch (e) {
+        throw new Error('لا يمكن الوصول لصفحة المتصفح');
+    }
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // محاولة الحصول على Chat مع timeout
+            let chat;
             try {
-                if (content instanceof MessageMedia) {
-                    return await chat.sendMessage(content, safeOptions);
-            } else {
-                    return await chat.sendMessage(content, safeOptions);
-                }
-            } catch (chatError) {
-                // إذا فشل chat.sendMessage، جرب client.sendMessage
-                console.warn(`[sendMessageSafe] خطأ في chat.sendMessage: ${chatError.message}, جرب client.sendMessage`);
+                chat = await Promise.race([
+                    client.getChatById(chatId),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Timeout getting chat')), 10000)
+                    )
+                ]);
+            } catch (getChatError) {
+                chat = null;
             }
-        }
-        
-        // استخدام client.sendMessage مع تعطيل sendSeen
-        try {
-            if (content instanceof MessageMedia) {
-                return await client.sendMessage(chatId, content, safeOptions);
-        } else {
-                return await client.sendMessage(chatId, content, safeOptions);
-        }
-    } catch (error) {
-            // إذا كان الخطأ "No LID for user"، نحاول الحصول على Chat أولاً
+
+            // إرسال الرسالة مع timeout
+            const sendPromise = chat
+                ? chat.sendMessage(content, safeOptions)
+                : client.sendMessage(chatId, content, safeOptions);
+
+            const result = await Promise.race([
+                sendPromise,
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout sending message')), 30000)
+                )
+            ]);
+
+            return result;
+
+        } catch (error) {
+            lastError = error;
+
+            // معالجة خاصة لـ detached frame أو timeout
+            if (error.message.includes('detached Frame') ||
+                error.message.includes('Timeout') ||
+                error.message.includes('Execution context was destroyed')) {
+
+                if (attempt < maxRetries) {
+                    const waitTime = attempt * 2000;
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    continue;
+                }
+            }
+
+            // معالجة No LID for user
             if (error.message && error.message.includes('No LID for user')) {
-                console.warn(`[sendMessageSafe] تحذير: No LID for user ${chatId}، محاولة الحصول على Chat...`);
-                
                 try {
                     const lidChat = await client.getChatById(chatId);
                     if (lidChat) {
-                        console.log(`[sendMessageSafe] تم الحصول على Chat، إرسال الرسالة...`);
-                        if (content instanceof MessageMedia) {
-                            return await lidChat.sendMessage(content, safeOptions);
-                        } else {
-                            return await lidChat.sendMessage(content, safeOptions);
-                        }
-                    } else {
-                        // إذا لم يتم إنشاء Chat، نحاول مرة أخرى بعد انتظار قليل
-                        console.log(`[sendMessageSafe] انتظار قليل ثم إعادة المحاولة...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-                        if (content instanceof MessageMedia) {
-                            return await client.sendMessage(chatId, content, safeOptions);
-                } else {
-                            return await client.sendMessage(chatId, content, safeOptions);
-                        }
-                }
+                        return await lidChat.sendMessage(content, safeOptions);
+                    }
                 } catch (lidError) {
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}. تأكد من أن الرقم ${chatId.replace('@c.us', '')} مسجل على WhatsApp.`);
+                    throw new Error(`فشل في إرسال الرسالة: ${error.message}`);
+                }
             }
-            }
-            
-            // إذا لم يكن الخطأ معروفاً، نرميه كما هو
+
+            // أخطاء أخرى
             throw error;
         }
-    } catch (error) {
-        // معالجة نهائية للأخطاء
-        console.error(`[sendMessageSafe] خطأ في إرسال الرسالة إلى ${chatId}:`, error.message);
-            throw error;
     }
+
+    throw new Error(`فشل إرسال الرسالة بعد ${maxRetries} محاولات: ${lastError.message}`);
 }
 
 // ========================================
@@ -295,12 +304,12 @@ async function sendMessageSafe(client, chatId, content, options = {}) {
 // إرسال رسالة نصية (مع API Key في الهيدر)
 router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || !message) {
             return res.status(400).json({
                 success: false,
@@ -308,7 +317,7 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -318,7 +327,7 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -327,37 +336,37 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // إرسال الرسالة باستخدام الدالة الآمنة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const result = await sendMessageSafe(client, chatId, message);
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الرسالة بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-message', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending message:', error);
         res.status(500).json({
             success: false,
@@ -402,12 +411,12 @@ router.post('/send-voice', validateApiKeyMiddleware, validateSessionTokenMiddlew
 // إرسال رسالة نصية (مع API Key في الرابط)
 router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || !message) {
             return res.status(400).json({
                 success: false,
@@ -415,7 +424,7 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -425,7 +434,7 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -434,37 +443,37 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // إرسال الرسالة باستخدام الدالة الآمنة
         let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const result = await sendMessageSafe(client, chatId, message);
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الرسالة بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-message', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending message:', error);
         res.status(500).json({
             success: false,
@@ -478,12 +487,12 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
 // إرسال رسالة مع ملف (مع API Key في الهيدر)
 router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, caption, url } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || (!req.file && !url)) {
             return res.status(400).json({
                 success: false,
@@ -491,7 +500,7 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -501,7 +510,7 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // إنشاء Media Message (من ملف مرفوع أو من رابط)
         let media;
         if (req.file) {
@@ -521,37 +530,37 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
                 return res.status(400).json({ success: false, error: 'فشل تنزيل الملف من الرابط', details: e.message, code: 'DOWNLOAD_FAILED' });
             }
         }
-        
+
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const result = await sendMessageSafe(client, chatId, media, { caption: caption || '' });
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-media', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الملف بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-media', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending media:', error);
         res.status(500).json({
             success: false,
@@ -565,12 +574,12 @@ router.post('/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMi
 // إرسال رسالة مع ملف (مع API Key في الرابط)
 router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, upload.single('media'), async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, caption, url } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || (!req.file && !url)) {
             return res.status(400).json({
                 success: false,
@@ -578,7 +587,7 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -588,7 +597,7 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // إنشاء MessageMedia (من ملف مرفوع أو من رابط)
         let media;
         if (req.file) {
@@ -608,20 +617,20 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
                 return res.status(400).json({ success: false, error: 'فشل تنزيل الملف من الرابط', details: e.message, code: 'DOWNLOAD_FAILED' });
             }
         }
-        
+
         // إرسال الملف
         const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
         const result = await sendMessageSafe(client, chatId, media, { caption: caption || '' });
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-media', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الملف بنجاح',
@@ -633,17 +642,17 @@ router.post('/:apiKey/send-media', messageLimiter, dailyMessageLimiter, validate
                 type: req.file.mimetype
             } : undefined
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-media', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending media:', error);
         res.status(500).json({
             success: false,
@@ -688,12 +697,12 @@ router.post('/:apiKey/send-voice', validateApiKeyMiddleware, validateSessionToke
 // إرسال رسالة إلى مجموعة (مع API Key في الهيدر)
 router.post('/send-group-message', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { groupId, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!groupId || !message) {
             return res.status(400).json({
                 success: false,
@@ -701,7 +710,7 @@ router.post('/send-group-message', validateApiKeyMiddleware, validateSessionToke
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -711,36 +720,36 @@ router.post('/send-group-message', validateApiKeyMiddleware, validateSessionToke
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // إرسال الرسالة للمجموعة
         const result = await sendMessageSafe(client, groupId, message);
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-group-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الرسالة للمجموعة بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-group-message', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending group message:', error);
         res.status(500).json({
             success: false,
@@ -754,12 +763,12 @@ router.post('/send-group-message', validateApiKeyMiddleware, validateSessionToke
 // إرسال رسالة إلى مجموعة (مع API Key في الرابط)
 router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { groupId, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!groupId || !message) {
             return res.status(400).json({
                 success: false,
@@ -767,7 +776,7 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
@@ -777,37 +786,37 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // إرسال الرسالة للمجموعة
         const chatId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
         const result = await sendMessageSafe(client, chatId, message);
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-group-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             message: 'تم إرسال الرسالة للمجموعة بنجاح',
             messageId: result.id._serialized,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-group-message', 'POST', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error sending group message:', error);
         res.status(500).json({
             success: false,
@@ -825,11 +834,11 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
 // الحصول على حالة الجلسة (مع API Key في الهيدر)
 router.get('/session-status', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
@@ -839,33 +848,33 @@ router.get('/session-status', validateApiKeyMiddleware, validateSessionTokenMidd
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/session-status', 'GET', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             sessionId: sessionId,
             status: client.state,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/session-status', 'GET', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error getting session status:', error);
         res.status(500).json({
             success: false,
@@ -919,11 +928,11 @@ router.get('/messages/:messageId', validateApiKeyMiddleware, validateSessionToke
 // الحصول على حالة الجلسة (مع API Key في الرابط)
 router.get('/:apiKey/session-status', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
@@ -933,33 +942,33 @@ router.get('/:apiKey/session-status', validateApiKeyMiddleware, validateSessionT
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/session-status', 'GET', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         res.json({
             success: true,
             sessionId: sessionId,
             status: 'connected',
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/session-status', 'GET', 500,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         console.error('Error getting session status:', error);
         res.status(500).json({
             success: false,
@@ -1007,12 +1016,12 @@ router.get('/:apiKey/messages/:messageId', validateApiKeyMiddleware, validateSes
 // إرسال رسائل جماعية (مع API Key في الرابط)
 router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || !Array.isArray(to) || to.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -1020,7 +1029,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         if (!message) {
             return res.status(400).json({
                 success: false,
@@ -1028,7 +1037,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -1038,7 +1047,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -1047,7 +1056,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // إرسال الرسائل
         const results = [];
         for (const phoneNumber of to) {
@@ -1068,19 +1077,19 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
                 });
             }
         }
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-bulk-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         const successCount = results.filter(r => r.success).length;
         const failCount = results.filter(r => !r.success).length;
-        
+
         res.json({
             success: true,
             message: `تم إرسال ${successCount} رسالة بنجاح${failCount > 0 ? ` وفشل ${failCount} رسالة` : ''}`,
@@ -1090,7 +1099,7 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
             results,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
         console.error('Bulk message send error:', error);
@@ -1106,12 +1115,12 @@ router.post('/:apiKey/send-bulk-message', messageLimiter, dailyMessageLimiter, v
 // إرسال رسائل جماعية (مع API Key في الهيدر)
 router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { to, message } = req.body;
         const { userId, apiKeyId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         if (!to || !Array.isArray(to) || to.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -1119,7 +1128,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         if (!message) {
             return res.status(400).json({
                 success: false,
@@ -1127,7 +1136,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
                 code: 'MISSING_PARAMETERS'
             });
         }
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -1137,7 +1146,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -1146,7 +1155,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // إرسال الرسائل
         const results = [];
         for (const phoneNumber of to) {
@@ -1167,19 +1176,19 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
                 });
             }
         }
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-bulk-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
-        
+
         const successCount = results.filter(r => r.success).length;
         const failCount = results.filter(r => !r.success).length;
-        
+
         res.json({
             success: true,
             message: `تم إرسال ${successCount} رسالة بنجاح${failCount > 0 ? ` وفشل ${failCount} رسالة` : ''}`,
@@ -1189,7 +1198,7 @@ router.post('/send-bulk-message', messageLimiter, dailyMessageLimiter, validateA
             results,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
         console.error('Bulk message send error:', error);
@@ -1209,11 +1218,11 @@ router.get('/:apiKey/messages-from/:phoneNumber', validateApiKeyMiddleware, vali
         const { phoneNumber } = req.params;
         const { limit = 50 } = req.query;
         const lim = Math.min(parseInt(limit) || 50, 200);
-        
+
         // تنظيف رقم الهاتف
         const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
         const chatId = `${cleanPhone}@c.us`;
-        
+
         // جلب الرسائل المستقبلة فقط (from_me = 0) من هذا الرقم
         const rows = db.prepare(`
             SELECT id, session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, sender, receiver, timestamp 
@@ -1222,7 +1231,7 @@ router.get('/:apiKey/messages-from/:phoneNumber', validateApiKeyMiddleware, vali
             ORDER BY id DESC 
             LIMIT ?
         `).all(String(sessionId), chatId, lim);
-        
+
         res.json({
             success: true,
             phoneNumber: cleanPhone,
@@ -1245,11 +1254,11 @@ router.get('/messages-from/:phoneNumber', validateApiKeyMiddleware, validateSess
         const { phoneNumber } = req.params;
         const { limit = 50 } = req.query;
         const lim = Math.min(parseInt(limit) || 50, 200);
-        
+
         // تنظيف رقم الهاتف
         const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
         const chatId = `${cleanPhone}@c.us`;
-        
+
         // جلب الرسائل المستقبلة فقط (from_me = 0) من هذا الرقم
         const rows = db.prepare(`
             SELECT id, session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, sender, receiver, timestamp 
@@ -1258,7 +1267,7 @@ router.get('/messages-from/:phoneNumber', validateApiKeyMiddleware, validateSess
             ORDER BY id DESC 
             LIMIT ?
         `).all(String(sessionId), chatId, lim);
-        
+
         res.json({
             success: true,
             phoneNumber: cleanPhone,
@@ -1278,7 +1287,7 @@ router.get('/messages-from/:phoneNumber', validateApiKeyMiddleware, validateSess
 router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     try {
         const { sessionId } = req.sessionTokenInfo;
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -1288,7 +1297,7 @@ router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMi
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -1297,10 +1306,10 @@ router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMi
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // جلب جهات الاتصال
         const contacts = await client.getContacts();
-        
+
         // تنسيق البيانات
         const formattedContacts = contacts.map(contact => ({
             id: contact.id._serialized,
@@ -1311,13 +1320,13 @@ router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMi
             isGroup: contact.isGroup || false,
             isBusiness: contact.isBusiness || false
         }));
-        
+
         res.json({
             success: true,
             count: formattedContacts.length,
             contacts: formattedContacts
         });
-        
+
     } catch (error) {
         console.error('Get contacts error:', error);
         res.status(500).json({
@@ -1333,7 +1342,7 @@ router.get('/:apiKey/contacts', validateApiKeyMiddleware, validateSessionTokenMi
 router.get('/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware, async (req, res) => {
     try {
         const { sessionId } = req.sessionTokenInfo;
-        
+
         // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
@@ -1343,7 +1352,7 @@ router.get('/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
@@ -1352,10 +1361,10 @@ router.get('/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware
                 code: 'SESSION_NOT_READY'
             });
         }
-        
+
         // جلب جهات الاتصال
         const contacts = await client.getContacts();
-        
+
         // تنسيق البيانات
         const formattedContacts = contacts.map(contact => ({
             id: contact.id._serialized,
@@ -1366,13 +1375,13 @@ router.get('/contacts', validateApiKeyMiddleware, validateSessionTokenMiddleware
             isGroup: contact.isGroup || false,
             isBusiness: contact.isBusiness || false
         }));
-        
+
         res.json({
             success: true,
             count: formattedContacts.length,
             contacts: formattedContacts
         });
-        
+
     } catch (error) {
         console.error('Get contacts error:', error);
         res.status(500).json({
@@ -1412,15 +1421,15 @@ router.get('/:apiKey/test', validateApiKeyMiddleware, (req, res) => {
 router.get('/:apiKey/debug-sessions', validateApiKeyMiddleware, (req, res) => {
     try {
         const { userId } = req.apiKeyInfo;
-        
+
         // الحصول على جميع الجلسات للمستخدم
         const sessionsStmt = db.prepare('SELECT * FROM sessions WHERE user_id = ?');
         const sessions = sessionsStmt.all(userId);
-        
+
         // الحصول على جميع التوكنات للمستخدم
         const tokensStmt = db.prepare('SELECT * FROM session_tokens WHERE user_id = ?');
         const tokens = tokensStmt.all(userId);
-        
+
         // الحصول على الجلسات النشطة في الذاكرة
         const activeSessions = [];
         if (activeClientsRef) {
@@ -1431,7 +1440,7 @@ router.get('/:apiKey/debug-sessions', validateApiKeyMiddleware, (req, res) => {
                 });
             }
         }
-        
+
         res.json({
             success: true,
             sessions: sessions,
@@ -1453,11 +1462,11 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
     try {
         const { userId } = req.apiKeyInfo;
         const { sessionId } = req.sessionTokenInfo;
-        
+
         // التحقق من أن الجلسة تخص المستخدم
         const sessionStmt = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?');
         const session = sessionStmt.get(sessionId, userId);
-        
+
         if (!session) {
             return res.status(404).json({
                 success: false,
@@ -1465,18 +1474,18 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // إيقاف الجلسة الحالية إذا كانت موجودة
         if (activeClientsRef && activeClientsRef.has(sessionId)) {
             const currentClient = activeClientsRef.get(sessionId);
             await destroyClientCompletely(sessionId, currentClient, null);
             activeClientsRef.delete(sessionId);
         }
-        
+
         // إنشاء جلسة جديدة
         const { Client, LocalAuth } = require('whatsapp-web.js');
         const path = require('path');
-        
+
         const client = new Client({
             authStrategy: new LocalAuth({
                 clientId: `session_${sessionId}`,
@@ -1487,33 +1496,33 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
                 args: ['--no-sandbox', '--disable-setuid-sandbox']
             }
         });
-        
+
         activeClientsRef.set(sessionId, client);
-        
+
         // انتظار الجلسة لتكون جاهزة
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 activeClientsRef.delete(sessionId);
                 reject(new Error('Timeout waiting for session'));
-            }, 30000);
-            
+            }, 60000);
+
             client.on('ready', () => {
                 clearTimeout(timeout);
                 resolve();
             });
-            
+
             client.on('disconnected', (reason) => {
                 clearTimeout(timeout);
                 activeClientsRef.delete(sessionId);
                 reject(new Error(`Session disconnected: ${reason}`));
             });
-            
+
             client.on('auth_failure', (msg) => {
                 clearTimeout(timeout);
                 activeClientsRef.delete(sessionId);
                 reject(new Error(`Authentication failed: ${msg}`));
             });
-            
+
             try {
                 client.initialize();
             } catch (initError) {
@@ -1522,14 +1531,14 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
                 reject(new Error(`Failed to initialize client: ${initError.message}`));
             }
         });
-        
+
         res.json({
             success: true,
             message: 'تم إعادة تشغيل الجلسة بنجاح',
             sessionId: sessionId,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         console.error('Error restarting session:', error);
         res.status(500).json({
@@ -1548,15 +1557,15 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 // الحصول على معلومات التوكن لجلسة محددة (مع API Key في الرابط)
 router.get('/:apiKey/session/:sessionId/token', validateApiKeyMiddleware, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { sessionId } = req.params;
         const { userId } = req.apiKeyInfo;
-        
+
         // التحقق من أن الجلسة تنتمي للمستخدم
         const sessionStmt = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?');
         const session = sessionStmt.get(sessionId, userId);
-        
+
         if (!session) {
             return res.status(404).json({
                 success: false,
@@ -1564,7 +1573,7 @@ router.get('/:apiKey/session/:sessionId/token', validateApiKeyMiddleware, async 
                 code: 'SESSION_NOT_FOUND'
             });
         }
-        
+
         // البحث عن توكن الجلسة أو إنشاؤه
         const { getSessionTokenBySessionId, createSessionToken } = require('./api-key-manager');
         let token = getSessionTokenBySessionId(userId, String(session.id));
@@ -1572,9 +1581,9 @@ router.get('/:apiKey/session/:sessionId/token', validateApiKeyMiddleware, async 
             const result = createSessionToken(userId, String(session.id));
             token = result.token;
         }
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         res.json({
             success: true,
             sessionId: session.id,
@@ -1583,10 +1592,10 @@ router.get('/:apiKey/session/:sessionId/token', validateApiKeyMiddleware, async 
             status: session.status,
             timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
         const responseTime = Date.now() - startTime;
-        
+
         console.error('Error getting session token:', error);
         res.status(500).json({
             success: false,
@@ -1633,7 +1642,7 @@ router.get('/packages/:id', (req, res) => {
                 error: 'الباقة غير موجودة'
             });
         }
-        
+
         res.json({
             success: true,
             data: {
@@ -1654,7 +1663,7 @@ router.get('/packages/:id', (req, res) => {
 router.post('/subscriptions', (req, res) => {
     try {
         const { packageId, paymentMethod } = req.body;
-        
+
         if (!req.session.userId) {
             return res.status(401).json({
                 success: false,
@@ -1680,7 +1689,7 @@ router.post('/subscriptions', (req, res) => {
 
         // إنشاء الاشتراك
         const result = PackageManager.createSubscription(req.session.userId, packageId, 'pending');
-        
+
         res.json({
             success: true,
             message: 'تم إنشاء الاشتراك بنجاح',
@@ -1710,7 +1719,7 @@ router.get('/subscriptions', (req, res) => {
 
         const subscriptions = PackageManager.getUserSubscriptions(req.session.userId);
         const activeSubscription = PackageManager.getUserActiveSubscription(req.session.userId);
-        
+
         res.json({
             success: true,
             data: {
@@ -1740,7 +1749,7 @@ router.get('/subscription/status', (req, res) => {
         const subscription = PackageManager.getUserActiveSubscription(req.session.userId);
         const maxSessions = PackageManager.getUserMaxSessions(req.session.userId);
         const isValid = PackageManager.isUserSubscriptionValid(req.session.userId);
-        
+
         res.json({
             success: true,
             data: {
@@ -1804,7 +1813,7 @@ function requireAdmin(req, res, next) {
 router.post('/admin/packages', requireAdmin, (req, res) => {
     try {
         const { name, description, price, currency, duration_days, max_sessions, features } = req.body;
-        
+
         if (!name || !price || !duration_days || !max_sessions) {
             return res.status(400).json({
                 success: false,
@@ -1839,7 +1848,7 @@ router.post('/admin/packages', requireAdmin, (req, res) => {
 router.put('/admin/packages/:id', requireAdmin, (req, res) => {
     try {
         const { name, description, price, currency, duration_days, max_sessions, features } = req.body;
-        
+
         const result = PackageManager.updatePackage(req.params.id, {
             name,
             description,
@@ -1873,7 +1882,7 @@ router.put('/admin/packages/:id', requireAdmin, (req, res) => {
 router.delete('/admin/packages/:id', requireAdmin, (req, res) => {
     try {
         const result = PackageManager.deletePackage(req.params.id);
-        
+
         if (result.changes === 0) {
             return res.status(404).json({
                 success: false,
@@ -1898,7 +1907,7 @@ router.delete('/admin/packages/:id', requireAdmin, (req, res) => {
 router.put('/admin/system/settings', requireAdmin, (req, res) => {
     try {
         const { admin_phone, admin_email, support_whatsapp, company_name, company_address, terms_conditions, privacy_policy } = req.body;
-        
+
         PackageManager.updateSystemSettings({
             admin_phone,
             admin_email,
@@ -1927,7 +1936,7 @@ router.get('/admin/stats', requireAdmin, (req, res) => {
     try {
         const subscriptionStats = PackageManager.getSubscriptionStats();
         const packageStats = PackageManager.getPackageStats();
-        
+
         res.json({
             success: true,
             data: {
@@ -1959,7 +1968,7 @@ router.use((error, req, res, next) => {
             });
         }
     }
-    
+
     if (error.message === 'نوع الملف غير مدعوم') {
         return res.status(400).json({
             success: false,
@@ -1967,7 +1976,7 @@ router.use((error, req, res, next) => {
             code: 'UNSUPPORTED_FILE_TYPE'
         });
     }
-    
+
     next(error);
 });
 
