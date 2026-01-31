@@ -218,37 +218,58 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
     };
 
     // فحص حالة العميل
-    if (!client || !client.pupPage) {
-        throw new Error('العميل غير متاح أو المتصفح مغلق');
+    if (!client) {
+        throw new Error('العميل غير متاح');
     }
 
-    // فحص أن الصفحة ليست مغلقة
+    // فحص أن العميل جاهز
+    if (!client.info) {
+        throw new Error('العميل غير جاهز بعد');
+    }
+
+    // فحص حالة الصفحة بشكل آمن
     try {
-        if (client.pupPage.isClosed()) {
-            throw new Error('صفحة المتصفح مغلقة');
+        if (client.pupPage) {
+            if (client.pupPage.isClosed && client.pupPage.isClosed()) {
+                throw new Error('صفحة المتصفح مغلقة');
+            }
         }
     } catch (e) {
-        throw new Error('لا يمكن الوصول لصفحة المتصفح');
+        // تجاهل أخطاء الفحص إذا كانت الصفحة غير متاحة
+        if (!e.message.includes('صفحة المتصفح مغلقة')) {
+            console.warn('[sendMessageSafe] تحذير في فحص الصفحة:', e.message);
+        }
     }
 
     let lastError;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+            // انتظار قصير بين المحاولات
+            if (attempt > 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+
+            // فحص حالة العميل قبل كل محاولة
+            if (!client.info) {
+                throw new Error('العميل غير جاهز');
+            }
+
             // محاولة الحصول على Chat مع timeout
             let chat;
             try {
                 chat = await Promise.race([
                     client.getChatById(chatId),
                     new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Timeout getting chat')), 10000)
+                        setTimeout(() => reject(new Error('Timeout getting chat')), 15000)
                     )
                 ]);
             } catch (getChatError) {
+                console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat (محاولة ${attempt}):`, getChatError.message);
                 chat = null;
             }
 
-            // إرسال الرسالة مع timeout
+            // إرسال الرسالة مع timeout أطول
             const sendPromise = chat
                 ? chat.sendMessage(content, safeOptions)
                 : client.sendMessage(chatId, content, safeOptions);
@@ -256,7 +277,7 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
             const result = await Promise.race([
                 sendPromise,
                 new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Timeout sending message')), 30000)
+                    setTimeout(() => reject(new Error('Timeout sending message')), 45000)
                 )
             ]);
 
@@ -268,12 +289,28 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
             // معالجة خاصة لـ detached frame أو timeout
             if (error.message.includes('detached Frame') ||
                 error.message.includes('Timeout') ||
-                error.message.includes('Execution context was destroyed')) {
+                error.message.includes('Execution context was destroyed') ||
+                error.message.includes('Target closed') ||
+                error.message.includes('Session closed')) {
 
+                console.warn(`[sendMessageSafe] خطأ في المحاولة ${attempt}/${maxRetries}: ${error.message}`);
+                
                 if (attempt < maxRetries) {
-                    const waitTime = attempt * 2000;
+                    // انتظار أطول بين المحاولات
+                    const waitTime = attempt * 3000; // 3, 6, 9 ثواني
+                    console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
+                    
+                    // فحص حالة العميل مرة أخرى
+                    if (!client || !client.info) {
+                        throw new Error('العميل غير متاح بعد المحاولة');
+                    }
+                    
                     continue;
+                } else {
+                    // في المحاولة الأخيرة، أبلغ عن الفشل
+                    console.error(`[sendMessageSafe] فشل بعد ${maxRetries} محاولات`);
+                    throw new Error(`فشل إرسال الرسالة بعد ${maxRetries} محاولات: ${error.message}`);
                 }
             }
 
@@ -1496,26 +1533,43 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 
         activeClientsRef.set(sessionId, client);
 
-        // انتظار الجلسة لتكون جاهزة
+        // انتظار الجلسة لتكون جاهزة (زيادة timeout إلى 120 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 activeClientsRef.delete(sessionId);
-                reject(new Error('Timeout waiting for session'));
-            }, 60000);
+                try {
+                    client.destroy().catch(() => {});
+                } catch (e) {
+                    // تجاهل أخطاء الإغلاق
+                }
+                reject(new Error('Timeout waiting for session (120 seconds)'));
+            }, 120000); // 120 ثانية بدلاً من 60
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                client.removeAllListeners('ready');
+                client.removeAllListeners('disconnected');
+                client.removeAllListeners('auth_failure');
+            };
 
             client.on('ready', () => {
-                clearTimeout(timeout);
+                cleanup();
                 resolve();
             });
 
             client.on('disconnected', (reason) => {
-                clearTimeout(timeout);
+                cleanup();
                 activeClientsRef.delete(sessionId);
+                try {
+                    client.destroy().catch(() => {});
+                } catch (e) {
+                    // تجاهل أخطاء الإغلاق
+                }
                 reject(new Error(`Session disconnected: ${reason}`));
             });
 
             client.on('auth_failure', (msg) => {
-                clearTimeout(timeout);
+                cleanup();
                 activeClientsRef.delete(sessionId);
                 reject(new Error(`Authentication failed: ${msg}`));
             });
