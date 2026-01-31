@@ -251,8 +251,21 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
             }
 
             // فحص حالة العميل قبل كل محاولة
-            if (!client.info) {
+            if (!client || !client.info) {
                 throw new Error('العميل غير جاهز');
+            }
+
+            // فحص حالة الصفحة قبل الاستخدام
+            try {
+                if (client.pupPage) {
+                    if (client.pupPage.isClosed && client.pupPage.isClosed()) {
+                        throw new Error('صفحة المتصفح مغلقة');
+                    }
+                }
+            } catch (pageCheckError) {
+                if (pageCheckError.message.includes('صفحة المتصفح مغلقة')) {
+                    throw pageCheckError;
+                }
             }
 
             // محاولة الحصول على Chat مع timeout
@@ -267,6 +280,17 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
             } catch (getChatError) {
                 console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat (محاولة ${attempt}):`, getChatError.message);
                 chat = null;
+            }
+
+            // فحص حالة الصفحة مرة أخرى قبل الإرسال
+            try {
+                if (client.pupPage && client.pupPage.isClosed && client.pupPage.isClosed()) {
+                    throw new Error('صفحة المتصفح مغلقة قبل الإرسال');
+                }
+            } catch (finalCheckError) {
+                if (finalCheckError.message.includes('صفحة المتصفح مغلقة')) {
+                    throw finalCheckError;
+                }
             }
 
             // إرسال الرسالة مع timeout أطول

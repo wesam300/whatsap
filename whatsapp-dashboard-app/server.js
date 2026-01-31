@@ -263,18 +263,60 @@ async function cleanupSessionFolder(sessionId) {
         const lockFile = path.join(sessionPath, 'SingletonLock');
         const cookieFile = path.join(sessionPath, 'SingletonCookie');
 
-        // محاولة حذف ملف القفل
+        // أولاً: قتل أي عمليات Chrome مرتبطة بهذه الجلسة
         try {
-            await fs.unlink(lockFile);
-            console.log(`[${sessionId}] تم حذف ملف القفل (SingletonLock)`);
-        } catch (e) {
-            if (e.code !== 'ENOENT') {
-                console.warn(`[${sessionId}] تعذر حذف SingletonLock: ${e.message}`);
-                // في حالة فشل الحذف (مثل EBUSY)، قد نحتاج للانتظار قليلاً أو محاولة قتله مرة أخرى
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+
+            if (process.platform === 'linux' || process.platform === 'darwin') {
+                // البحث عن عمليات Chrome مرتبطة بهذه الجلسة
+                try {
+                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`);
+                    const pids = stdout.trim().split('\n').filter(Boolean);
+                    if (pids.length > 0) {
+                        console.log(`[${sessionId}] تم العثور على ${pids.length} عملية مرتبطة، جاري إغلاقها...`);
+                        await execAsync(`kill -9 ${pids.join(' ')}`);
+                        // انتظار قليل بعد قتل العمليات
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                } catch (e) {
+                    // لا توجد عمليات، هذا طبيعي
+                }
+            }
+        } catch (killError) {
+            console.warn(`[${sessionId}] تحذير في قتل العمليات:`, killError.message);
+        }
+
+        // ثانياً: حذف ملفات القفل
+        // محاولة حذف ملف القفل مع retry
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                await fs.unlink(lockFile);
+                console.log(`[${sessionId}] تم حذف ملف القفل (SingletonLock)`);
+                break;
+            } catch (e) {
+                if (e.code === 'ENOENT') {
+                    // الملف غير موجود، هذا جيد
+                    break;
+                } else if (e.code === 'EBUSY' || e.code === 'EACCES') {
+                    // الملف قيد الاستخدام، انتظر وحاول مرة أخرى
+                    retries--;
+                    if (retries > 0) {
+                        console.log(`[${sessionId}] انتظار قبل إعادة محاولة حذف SingletonLock...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } else {
+                        console.warn(`[${sessionId}] تعذر حذف SingletonLock بعد 3 محاولات: ${e.message}`);
+                    }
+                } else {
+                    console.warn(`[${sessionId}] خطأ في حذف SingletonLock: ${e.message}`);
+                    break;
+                }
             }
         }
 
-        // محاولة حذف ملف الكوكيز (أحياناً يسبب مشاكل)
+        // محاولة حذف ملف الكوكيز
         try {
             await fs.unlink(cookieFile);
             console.log(`[${sessionId}] تم حذف ملف القفل (SingletonCookie)`);
@@ -283,6 +325,9 @@ async function cleanupSessionFolder(sessionId) {
                 // تجاهل أخطاء عدم الوجود
             }
         }
+
+        // ثالثاً: انتظار إضافي للتأكد من إغلاق جميع العمليات
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         return true;
     } catch (error) {

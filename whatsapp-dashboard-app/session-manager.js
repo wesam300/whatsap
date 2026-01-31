@@ -109,14 +109,30 @@ async function cleanupChromeZombies() {
             // البحث عن العمليات التي تحتوي على مسار الجلسات في سطر الأوامر
             // نستخدم نمط محدد جداً لتجنب إغلاق متصفحات أخرى
             try {
-                // البحث عن PIDs
+                // البحث عن PIDs - نمط أكثر تحديداً
                 const { stdout } = await execAsync('pgrep -f "chrome.*session-session_"');
                 const pids = stdout.trim().split('\n').filter(Boolean);
 
                 if (pids.length > 0) {
                     console.log(`🔫 تم العثور على ${pids.length} عملية معلقة: ${pids.join(', ')}`);
-                    // قتل العمليات بقوة
-                    await execAsync(`kill -9 ${pids.join(' ')}`);
+                    
+                    // قتل العمليات بشكل تدريجي (أولاً SIGTERM ثم SIGKILL)
+                    for (const pid of pids) {
+                        try {
+                            // محاولة إغلاق بشكل لطيف أولاً
+                            await execAsync(`kill -15 ${pid}`).catch(() => {});
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // إذا لم تُغلق، استخدم SIGKILL
+                            await execAsync(`kill -9 ${pid}`).catch(() => {});
+                        } catch (killError) {
+                            // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
+                        }
+                    }
+                    
+                    // انتظار للتأكد من إغلاق العمليات
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
                     console.log('✅ تم تنظيف جميع العمليات المعلقة بنجاح');
                     return pids.length;
                 } else {
