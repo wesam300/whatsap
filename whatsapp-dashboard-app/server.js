@@ -46,6 +46,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// Trust proxy (لإصلاح مشكلة express-rate-limit)
+app.set('trust proxy', true);
+
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
 const corsOptions = {

@@ -406,6 +406,11 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
                     )
                 ]);
             } catch (getChatError) {
+                // إذا كان الخطأ "detached Frame"، يجب إعادة تشغيل الجلسة
+                if (getChatError.message && getChatError.message.includes('detached Frame')) {
+                    // رمي الخطأ ليتم التعامل معه في معالج الخطأ الرئيسي
+                    throw getChatError;
+                }
                 // لا نطبع تحذير لكل محاولة لتقليل الضوضاء
                 if (attempt === 1) {
                     console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat، استخدام client.sendMessage مباشرة`);
