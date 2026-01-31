@@ -1,0 +1,6 @@
+node_modules/
+output/
+templates/*.json
+!templates/RPT_SAMPLE_INVOICE.json
+*.log
+.env

@@ -25,7 +25,7 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
         try {
             // الحصول على المتصفح من العميل إذا كان متاحاً
             const puppeteerBrowser = client.pupBrowser || client.pupPage?.browser() || null;
-            
+
             // إغلاق المتصفح أولاً إذا كان متاحاً
             if (puppeteerBrowser) {
                 try {
@@ -38,18 +38,18 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
                             // تجاهل أخطاء إغلاق الصفحات
                         }
                     }
-                    
+
                     // إغلاق المتصفح
                     await puppeteerBrowser.close();
                     console.log(`[${sessionId}] تم إغلاق المتصفح بنجاح`);
-                    
+
                     // انتظار قليل للتأكد من إغلاق المتصفح
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (browserError) {
                     console.error(`[${sessionId}] خطأ في إغلاق المتصفح:`, browserError.message);
                 }
             }
-            
+
             // إغلاق العميل
             try {
                 await client.destroy();
@@ -59,7 +59,7 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
             }
         } catch (destroyError) {
             console.error(`[${sessionId}] خطأ في إغلاق العميل:`, destroyError.message);
-            
+
             // محاولة إجبار الإغلاق
             try {
                 // الحصول على PID من المتصفح إذا كان متاحاً
@@ -71,7 +71,7 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
                         const { exec } = require('child_process');
                         const { promisify } = require('util');
                         const execAsync = promisify(exec);
-                        
+
                         try {
                             if (process.platform === 'win32') {
                                 await execAsync(`taskkill /F /T /PID ${pid}`);
@@ -95,7 +95,102 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
     }
 }
 
+// دالة لتنظيف عمليات Chrome الزائدة (Zombies)
+async function cleanupChromeZombies() {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    const platform = process.platform;
+
+    console.log('🧹 بدء تنظيف عمليات Chrome المعلقة (Zombies)...');
+
+    try {
+        if (platform === 'linux' || platform === 'darwin') {
+            // البحث عن العمليات التي تحتوي على مسار الجلسات في سطر الأوامر
+            // نستخدم نمط محدد جداً لتجنب إغلاق متصفحات أخرى
+            try {
+                // البحث عن PIDs
+                const { stdout } = await execAsync('pgrep -f "chrome.*session-session_"');
+                const pids = stdout.trim().split('\n').filter(Boolean);
+
+                if (pids.length > 0) {
+                    console.log(`🔫 تم العثور على ${pids.length} عملية معلقة: ${pids.join(', ')}`);
+                    // قتل العمليات بقوة
+                    await execAsync(`kill -9 ${pids.join(' ')}`);
+                    console.log('✅ تم تنظيف جميع العمليات المعلقة بنجاح');
+                    return pids.length;
+                } else {
+                    console.log('✨ لا توجد عمليات معلقة');
+                }
+            } catch (e) {
+                if (e.code === 1) {
+                    console.log('✨ لا توجد عمليات معلقة');
+                } else {
+                    throw e;
+                }
+            }
+        } else if (platform === 'win32') {
+            try {
+                // استخدام WMIC للويندوز
+                await execAsync('wmic process where "name=\'chrome.exe\' and commandline like \'%session-session_%\'" call terminate');
+                console.log('✅ تمت محاولة تنظيف العمليات على Windows');
+            } catch (e) {
+                // تجاهل الأخطاء في ويندوز لأنها قد تعني عدم وجود عمليات
+                console.log('ℹ️ محاولة التنظيف على Windows انتهت');
+            }
+        }
+    } catch (error) {
+        console.error('⚠️ خطأ أثناء تنظيف العمليات المعلقة:', error.message);
+    }
+    return 0;
+}
+
+// دالة مساعدة لإعداد خيارات Puppeteer لتعطيل تخزين الميديا
+function getPuppeteerOptions() {
+    return {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            // تعطيل تخزين الميديا والكاش
+            '--disable-dev-shm-usage',
+            '--disable-application-cache',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-component-update',
+            '--disable-default-apps',
+            '--disable-domain-reliability',
+            '--disable-features=TranslateUI',
+            '--disable-hang-monitor',
+            '--disable-ipc-flooding-protection',
+            '--disable-notifications',
+            '--disable-offer-store-unmasked-wallet-cards',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-renderer-backgrounding',
+            '--disable-sync',
+            '--disable-translate',
+            '--metrics-recording-only',
+            '--no-first-run',
+            '--safebrowsing-disable-auto-update',
+            '--enable-automation',
+            '--password-store=basic',
+            '--use-mock-keychain',
+            // تعطيل blob storage و IndexedDB
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=BlinkHeapDirtyFlag,BlinkHeapIncrementalMarking',
+        ],
+        // تعطيل تخزين الملفات المؤقتة
+        ignoreDefaultArgs: ['--enable-automation'],
+    };
+}
+
 module.exports = {
-    destroyClientCompletely
+    destroyClientCompletely,
+    cleanupChromeZombies,
+    getPuppeteerOptions
 };
 

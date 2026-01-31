@@ -12,7 +12,7 @@ const fetch = require('node-fetch');
 const mime = require('mime');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
-const { destroyClientCompletely } = require('./session-manager');
+const { destroyClientCompletely, getPuppeteerOptions } = require('./session-manager');
 
 const router = express.Router();
 
@@ -1491,10 +1491,7 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
                 clientId: `session_${sessionId}`,
                 dataPath: path.join(__dirname, 'sessions')
             }),
-            puppeteer: {
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
-            }
+            puppeteer: getPuppeteerOptions()
         });
 
         activeClientsRef.set(sessionId, client);

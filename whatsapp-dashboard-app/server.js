@@ -158,7 +158,7 @@ const reconnectingSessionsSet = new Set();
 setActiveClientsRef(activeClients);
 
 // استيراد دالة إغلاق الجلسة من ملف مشترك
-const { destroyClientCompletely: destroyClientCompletelyBase } = require('./session-manager');
+const { destroyClientCompletely: destroyClientCompletelyBase, cleanupChromeZombies, getPuppeteerOptions } = require('./session-manager');
 
 // دالة مساعدة لحذف مجلد الجلسة من القرص
 async function deleteSessionFolder(sessionId) {
@@ -254,48 +254,7 @@ async function getDirectorySize(dirPath) {
     return totalSize;
 }
 
-// دالة مساعدة لإعداد خيارات Puppeteer لتعطيل تخزين الميديا
-function getPuppeteerOptions() {
-    return {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            // تعطيل تخزين الميديا والكاش
-            '--disable-dev-shm-usage',
-            '--disable-application-cache',
-            '--disable-background-networking',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-breakpad',
-            '--disable-client-side-phishing-detection',
-            '--disable-component-update',
-            '--disable-default-apps',
-            '--disable-domain-reliability',
-            '--disable-features=TranslateUI',
-            '--disable-hang-monitor',
-            '--disable-ipc-flooding-protection',
-            '--disable-notifications',
-            '--disable-offer-store-unmasked-wallet-cards',
-            '--disable-popup-blocking',
-            '--disable-prompt-on-repost',
-            '--disable-renderer-backgrounding',
-            '--disable-sync',
-            '--disable-translate',
-            '--metrics-recording-only',
-            '--no-first-run',
-            '--safebrowsing-disable-auto-update',
-            '--enable-automation',
-            '--password-store=basic',
-            '--use-mock-keychain',
-            // تعطيل blob storage و IndexedDB
-            '--disable-blink-features=AutomationControlled',
-            '--disable-features=BlinkHeapDirtyFlag,BlinkHeapIncrementalMarking',
-        ],
-        // تعطيل تخزين الملفات المؤقتة
-        ignoreDefaultArgs: ['--enable-automation'],
-    };
-}
+// تم نقل getPuppeteerOptions إلى session-manager.js
 
 // دالة لتنظيف مجلد جلسة معينة لحل مشكلة browser already running
 async function cleanupSessionFolder(sessionId) {
@@ -757,7 +716,8 @@ async function monitorChromeProcesses() {
 
         if (chromeCount > expectedMax) {
             console.warn(`⚠️ عدد عمليات Chrome (${chromeCount}) أكبر من المتوقع (${expectedMax})`);
-            console.warn(`💡 يُنصح بتنظيف العمليات الزائدة`);
+            console.warn(`💡 يتم الان تنظيف العمليات الزائدة...`);
+            await cleanupChromeZombies();
         }
 
     } catch (error) {
@@ -3022,6 +2982,9 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
+
+    // تنظيف عمليات Chrome المعلقة عند بدء التشغيل
+    await cleanupChromeZombies();
 
     // تنظيف الجلسات المنتهية الصلاحية
     cleanupExpiredSessions().catch(err => {

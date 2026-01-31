@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - WhatsApp Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fab fa-whatsapp"></i>
+                <span>WhatsApp API</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-target="dashboard">
+                    <i class="fas fa-home"></i> الرئيسية
+                </a>
+                <a href="/builder" class="nav-item">
+                    <i class="fas fa-file-alt"></i> منشئ التقارير
+                </a>
+                <a href="#" class="nav-item" data-target="settings">
+                    <i class="fas fa-cog"></i> الإعدادات
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <h2>لوحة التحكم</h2>
+                <div class="user-info">
+                    <span class="status-badge connected">متصل</span>
+                    <i class="fas fa-user-circle"></i>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Status Card -->
+                <div class="card status-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-server"></i> حالة الخادم</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-indicator">
+                            <div class="indicator active"></div>
+                            <span>يعمل بنجاح</span>
+                        </div>
+                        <div class="server-details">
+                            <p><strong>المنفذ:</strong> 3000</p>
+                            <p><strong>الجلسات النشطة:</strong> <span id="activeSessionsCount">...</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Builder Card -->
+                <div class="card builder-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-magic"></i> منشئ التقارير</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <p>صمم تقارير احترافية وأرسلها عبر واتساب مباشرة</p>
+                        <a href="/builder" class="btn btn-primary">
+                            فتح المنشئ <i class="fas fa-arrow-left"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Sessions List -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-users"></i> الجلسات النشطة</h3>
+                        <button class="btn btn-sm" id="refreshSessions"><i class="fas fa-sync"></i> تحديث</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>المعرف (Session ID)</th>
+                                    <th>الحالة</th>
+                                    <th>الرقم</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessionsTableBody">
+                                <!-- Sessions will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- QR Code Modal (Hidden) -->
+                <div id="qrModal" class="modal">
+                    <div class="modal-content">
+                        <span class="close-modal">&times;</span>
+                        <h3>مسح رمز QR</h3>
+                        <div id="qrCodeContainer"></div>
+                        <p class="qr-instruction">افتح واتساب في هاتفك > الأجهزة المرتبطة > ربط جهاز</p>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>
