@@ -78,42 +78,8 @@ async function autoRestartSession(sessionId) {
             activeClientsRef.delete(sessionIdStr);
         }
 
-        // 2. تنظيف مجلد الجلسة
-        try {
-            const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-            const lockFile = path.join(sessionPath, 'SingletonLock');
-            const cookieFile = path.join(sessionPath, 'SingletonCookie');
-
-            // قتل عمليات Chrome المرتبطة
-            if (process.platform === 'linux' || process.platform === 'darwin') {
-                try {
-                    const { exec } = require('child_process');
-                    const { promisify } = require('util');
-                    const execAsync = promisify(exec);
-                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`).catch(() => ({ stdout: '' }));
-                    const pids = stdout.trim().split('\n').filter(Boolean);
-                    if (pids.length > 0) {
-                        await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => {});
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                } catch (e) {
-                    // تجاهل الأخطاء
-                }
-            }
-
-            // حذف ملفات القفل
-            try {
-                await fs.unlink(lockFile).catch(() => {});
-                await fs.unlink(cookieFile).catch(() => {});
-            } catch (e) {
-                // تجاهل الأخطاء
-            }
-        } catch (cleanupError) {
-            console.warn(`[autoRestartSession] تحذير في تنظيف المجلد: ${cleanupError.message}`);
-        }
-
-        // 3. انتظار قليل
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // 2. لا قتل لعمليات من خارج المكتبة — الاعتماد على destroyClientCompletely (client.destroy()) فقط
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // 4. إنشاء جلسة جديدة
         const { Client, LocalAuth } = require('whatsapp-web.js');

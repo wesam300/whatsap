@@ -300,14 +300,11 @@ async function destroyClientCompletely(sessionId, client) {
     // تنظيف جميع المؤقتات والبيانات الوصفية عبر sessionTracker
     sessionTracker.cleanup(sessionId);
 
-    // استدعاء الدالة الأساسية
+    // استدعاء الدالة الأساسية (المكتبة تغلق المتصفح عبر client.destroy())
     await destroyClientCompletelyBase(sessionId, client);
 
     // حذف العميل من الخريطة
     activeClients.delete(String(sessionId));
-
-    // تنظيف مجلد الجلسة (lock files فقط)
-    await cleanSessionLocks(sessionId, sessionsDir);
 }
 
 // دالة لإعداد معالجات الأحداث للعميل (احترافي - بدون تسرب ذاكرة)
@@ -510,9 +507,7 @@ async function monitorChromeProcesses() {
         console.log(`📊 تم العثور على ${chromeCount} عملية Chrome`);
 
         if (chromeCount > expectedMax) {
-            console.warn(`⚠️ عدد عمليات Chrome (${chromeCount}) أكبر من المتوقع (${expectedMax})`);
-            console.warn(`💡 يتم الان تنظيف العمليات الزائدة (جلسات غير نشطة فقط)...`);
-            await cleanupChromeZombies(sessionsDir, activeClients);
+            console.warn(`⚠️ عدد عمليات Chrome (${chromeCount}) أكبر من المتوقع (${expectedMax}) — لا يتم قتل أي عملية (الاعتماد على client.destroy() فقط)`);
         }
 
     } catch (error) {
@@ -2074,10 +2069,6 @@ io.on('connection', (socket) => {
                 await destroyClientCompletely(sessionId, activeClients.get(String(sessionId)));
             }
 
-            // تجنب "The browser is already running": تنظيف أي عملية Chrome قديمة تستخدم نفس مجلد الجلسة
-            await cleanSessionLocks(sessionId, sessionsDir);
-            await new Promise(resolve => setTimeout(resolve, 2500));
-
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
             // مسح QR القديم دائماً عند البدء حتى لا يظهر رمز منتهي للمستخدم
             db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?').run(sessionId);
@@ -2374,8 +2365,7 @@ server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
 
-    // تنظيف عمليات Chrome المعلقة عند بدء التشغيل (قبل الاستعادة، activeClients فارغ فتُنظَّف كل المجلدات)
-    await cleanupChromeZombies(sessionsDir, activeClients);
+    // لا قتل لعمليات Chrome من خارج المكتبة — الاعتماد على client.destroy() فقط
 
     // تنظيف الجلسات المنتهية الصلاحية
     cleanupExpiredSessions().catch(err => {
