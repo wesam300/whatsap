@@ -735,7 +735,7 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
   "failCount": 1,
   "results": [
     {
-      "to": "966501234567",
+      "to": "967772000992",
       "success": true,
       "messageId": "3EB0C76...",
       "timestamp": "2024-01-01T12:00:00.000Z"
@@ -787,13 +787,13 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
                 <div class="code-block">
 {
   "success": true,
-  "phoneNumber": "966501234567",
+  "phoneNumber": "967772000992",
   "count": 10,
   "messages": [
     {
       "id": 1,
       "session_id": "1",
-      "chat_id": "966501234567@c.us",
+      "chat_id": "967772000992@c.us",
       "message_id": "3EB0C76...",
       "from_me": 0,
       "type": "chat",
@@ -819,8 +819,8 @@ X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx
   "count": 150,
   "contacts": [
     {
-      "id": "966501234567@c.us",
-      "number": "966501234567",
+      "id": "967772000992@c.us",
+      "number": "967772000992",
       "name": "أحمد محمد",
       "isUser": true,
       "isMyContact": true,
@@ -857,7 +857,7 @@ curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "to": "966501234567",
+    "to": "967772000992",
     "message": "مرحباً! هذه رسالة تجريبية من API"
   }'
                 </div>
@@ -869,7 +869,7 @@ curl -X POST "http://srv998477.hstgr.cloud/api/send-message" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "to": "966501234567",
+    "to": "967772000992",
     "message": "مرحباً! هذه رسالة تجريبية من API"
   }'
                 </div>
@@ -879,7 +879,7 @@ curl -X POST "http://srv998477.hstgr.cloud/api/send-message" \
 curl -X POST "http://srv998477.hstgr.cloud/api/send-media" \
   -H "X-API-Key: wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
-  -F "to=966501234567" \
+  -F "to=967772000992" \
   -F "media=@/path/to/image.jpg" \
   -F "caption=صورة جميلة!"
                 </div>
@@ -890,7 +890,7 @@ curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "to": "966501234567",
+    "to": "967772000992",
     "url": "https://example.com/path/report.pdf",
     "caption": "تقرير اليوم"
   }'
@@ -920,7 +920,7 @@ curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "to": "966501234567",
+    "to": "967772000992",
     "audioBase64": "<BASE64>",
     "mimeType": "audio/ogg"
   }'
@@ -956,14 +956,14 @@ curl -X POST "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "to": ["966501234567", "966501234568", "966501234569"],
+    "to": ["967772000992", "966501234568", "966501234569"],
     "message": "مرحباً! هذه رسالة جماعية من API"
   }'
                 </div>
 
                 <h3>🆕 مثال: جلب الرسائل المستقبلة من رقم معين</h3>
                 <div class="code-block">
-curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages-from/966501234567?limit=20" \
+curl -X GET "http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/messages-from/967772000992?limit=20" \
   -H "X-Session-Token: st_xxxxxxxxxxxxxxxxxxxxxxxx"
                 </div>
 
@@ -982,7 +982,7 @@ const response = await fetch('http://srv998477.hstgr.cloud/api/wa_xxxxxxxxxxxxxx
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    to: '966501234567',
+    to: '967772000992',
     message: 'مرحباً من JavaScript!'
   })
 });

@@ -220,7 +220,6 @@ function validateSessionToken(token) {
 // دوال تسجيل API
 // ========================================
 
-// تسجيل طلب API
 function logApiRequest(userId, apiKeyId, sessionTokenId, endpoint, method, statusCode, responseTime, ipAddress, userAgent) {
     try {
         const stmt = db.prepare(`
@@ -229,7 +228,19 @@ function logApiRequest(userId, apiKeyId, sessionTokenId, endpoint, method, statu
         `);
         stmt.run(userId, apiKeyId, sessionTokenId, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
     } catch (error) {
-        console.error('Error logging API request:', error);
+        if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+            try {
+                const fallback = db.prepare(`
+                    INSERT INTO api_logs (user_id, api_key_id, session_token_id, endpoint, method, status_code, response_time, ip_address, user_agent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+                fallback.run(userId, null, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
+            } catch (e) {
+                console.error('Error logging API request (fallback):', e.message);
+            }
+        } else {
+            console.error('Error logging API request:', error.message);
+        }
     }
 }
 

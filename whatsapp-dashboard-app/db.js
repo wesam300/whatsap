@@ -325,7 +325,7 @@ try {
     if (settingsCount.c === 0) {
         db.prepare(`
             INSERT INTO system_settings (id, admin_phone, admin_email, support_whatsapp, company_name, company_address)
-            VALUES (1, '+966501234567', 'admin@example.com', '+966501234567', 'شركة التطوير', 'الرياض، المملكة العربية السعودية')
+            VALUES (1, '+967772000992', 'admin@example.com', '+967772000992', 'شركة التطوير', 'الرياض، المملكة العربية السعودية')
         `).run();
     }
 } catch (e) {

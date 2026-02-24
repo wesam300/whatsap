@@ -299,9 +299,21 @@ function validateSessionTokenMiddleware(req, res, next) {
     next();
 }
 
-// ========================================
-// دالة إرسال الرسائل مع معالجة الأخطاء
-// ========================================
+function normalizePhoneToChatId(to) {
+    const digits = String(to).replace(/\D/g, '');
+    if (digits.length < 10) return { error: 'رقم غير صحيح' };
+    return { chatId: digits + '@c.us' };
+}
+
+async function ensureChatExists(client, chatId) {
+    try {
+        const chat = await client.getChatById(chatId);
+        return chat ? true : false;
+    } catch (e) {
+        return false;
+    }
+}
+
 async function sendMessageSafe(client, chatId, content, options = {}, maxRetries = 3, sessionId = null) {
     const safeOptions = { ...options, sendSeen: false };
 
@@ -413,7 +425,6 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             });
         }
 
-        // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
             return res.status(404).json({
@@ -423,7 +434,6 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             });
         }
 
-        // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
                 success: false,
@@ -432,18 +442,37 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             });
         }
 
-        // إرسال الرسالة باستخدام الدالة الآمنة
-        let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+        const normalized = normalizePhoneToChatId(to);
+        if (normalized.error) {
+            return res.status(400).json({ success: false, error: normalized.error, code: 'INVALID_PHONE' });
+        }
+        const chatId = normalized.chatId;
+
+        const chatExists = await ensureChatExists(client, chatId);
+        if (!chatExists) {
+            return res.status(400).json({
+                success: false,
+                error: 'الرقم غير مسجل على واتساب أو غير صحيح. تأكد من الرقم مع رمز الدولة (مثال: 967xxxxxxxxx)',
+                code: 'CHAT_NOT_FOUND'
+            });
+        }
+
         const result = await sendMessageSafe(client, chatId, message, {}, 3, String(sessionId));
 
         const responseTime = Date.now() - startTime;
-
-        // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
+
+        if (!result || !result.id || !result.id._serialized) {
+            return res.status(500).json({
+                success: false,
+                error: 'لم يتم تأكيد إرسال الرسالة. جرّب مرة أخرى أو أعد تشغيل الجلسة.',
+                code: 'SEND_VERIFY_FAILED'
+            });
+        }
 
         res.json({
             success: true,
@@ -454,8 +483,6 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
 
     } catch (error) {
         const responseTime = Date.now() - startTime;
-
-        // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-message', 'POST', 500,
@@ -536,7 +563,6 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             });
         }
 
-        // التحقق من وجود الجلسة
         const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
             return res.status(404).json({
@@ -546,7 +572,6 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             });
         }
 
-        // التحقق من أن الجلسة جاهزة
         if (!client.info) {
             return res.status(400).json({
                 success: false,
@@ -555,18 +580,37 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             });
         }
 
-        // إرسال الرسالة باستخدام الدالة الآمنة
-        let chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+        const normalized = normalizePhoneToChatId(to);
+        if (normalized.error) {
+            return res.status(400).json({ success: false, error: normalized.error, code: 'INVALID_PHONE' });
+        }
+        const chatId = normalized.chatId;
+
+        const chatExists = await ensureChatExists(client, chatId);
+        if (!chatExists) {
+            return res.status(400).json({
+                success: false,
+                error: 'الرقم غير مسجل على واتساب أو غير صحيح. تأكد من الرقم مع رمز الدولة (مثال: 967xxxxxxxxx)',
+                code: 'CHAT_NOT_FOUND'
+            });
+        }
+
         const result = await sendMessageSafe(client, chatId, message, {}, 3, String(sessionId));
 
         const responseTime = Date.now() - startTime;
-
-        // تسجيل الطلب
         logApiRequest(
             userId, apiKeyId, req.sessionTokenInfo.id,
             '/api/send-message', 'POST', 200,
             responseTime, req.ip, req.get('User-Agent')
         );
+
+        if (!result || !result.id || !result.id._serialized) {
+            return res.status(500).json({
+                success: false,
+                error: 'لم يتم تأكيد إرسال الرسالة. جرّب مرة أخرى أو أعد تشغيل الجلسة.',
+                code: 'SEND_VERIFY_FAILED'
+            });
+        }
 
         res.json({
             success: true,
@@ -577,8 +621,6 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
 
     } catch (error) {
         const responseTime = Date.now() - startTime;
-
-        // تسجيل الطلب
         logApiRequest(
             req.apiKeyInfo.userId, req.apiKeyInfo.id, req.sessionTokenInfo?.id,
             '/api/send-message', 'POST', 500,
