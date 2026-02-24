@@ -298,8 +298,30 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
 }
 
 // ========================================
-// Chrome Zombie Cleanup — معطّل (الاعتماد على client.destroy() فقط حسب المكتبة)
+// تنظيف عمليات Chrome اليتيمة عند بدء التشغيل فقط
+// بعد إعادة تشغيل السيرفر لا يوجد مرجع للعميل القديم فيبقى المتصفح يعمل ويسبب "browser is already running"
 // ========================================
+async function killOrphanChromeProcessesAtStartup(sessionsDir) {
+    if (!sessionsDir || !fs.existsSync(sessionsDir) || process.platform === 'win32') {
+        return;
+    }
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    try {
+        const { stdout } = await execAsync('pgrep -f "session-session_"').catch(() => ({ stdout: '' }));
+        const pids = stdout.trim().split('\n').filter(Boolean).filter(pid => pid !== String(process.pid));
+        if (pids.length > 0) {
+            console.log(`🧹 [بدء التشغيل] إغلاق ${pids.length} عملية Chrome يتيمة من تشغيل سابق...`);
+            await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => {});
+            await new Promise(r => setTimeout(r, 3500));
+        }
+    } catch (e) {
+        // تجاهل
+    }
+}
+
+// معطّل أثناء التشغيل — الاعتماد على client.destroy() فقط
 async function cleanupChromeZombies() {
     return 0;
 }
@@ -717,8 +739,8 @@ async function restoreSessions({ db, activeClients, io, Client, LocalAuth, setup
                 await client.initialize();
                 restoredCount++;
 
-                // Stagger: wait between sessions to avoid overloading
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                // تأخير بين الجلسات حتى لا نفتح عدة متصفحات دفعة واحدة
+                await new Promise(resolve => setTimeout(resolve, 6000));
 
             } catch (error) {
                 const errMsg = error == null ? 'unknown' : (error.message || (typeof error.toString === 'function' ? error.toString() : String(error)));
@@ -761,6 +783,7 @@ module.exports = {
     // Core functions
     destroyClientCompletely,
     cleanupChromeZombies,
+    killOrphanChromeProcessesAtStartup,
     getPuppeteerOptions,
 
     // Session tracker

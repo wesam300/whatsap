@@ -177,6 +177,7 @@ setIoRef(io);
 const {
     destroyClientCompletely: destroyClientCompletelyBase,
     cleanupChromeZombies,
+    killOrphanChromeProcessesAtStartup,
     getPuppeteerOptions,
     sessionTracker,
     startSessionHeartbeat,
@@ -2067,6 +2068,7 @@ io.on('connection', (socket) => {
 
             if (activeClients.has(String(sessionId))) {
                 await destroyClientCompletely(sessionId, activeClients.get(String(sessionId)));
+                await new Promise(r => setTimeout(r, 2000));
             }
 
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
@@ -2365,7 +2367,8 @@ server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
 
-    // لا قتل لعمليات Chrome من خارج المكتبة — الاعتماد على client.destroy() فقط
+    // إغلاق عمليات Chrome اليتيمة من تشغيل سابق (مرة واحدة عند البدء فقط)
+    await killOrphanChromeProcessesAtStartup(sessionsDir);
 
     // تنظيف الجلسات المنتهية الصلاحية
     cleanupExpiredSessions().catch(err => {
@@ -2396,12 +2399,6 @@ server.listen(PORT, async () => {
             console.log(`✅ تم تنظيف ${cleanupResult.cleanedCount} جلسة محذوفة، تم تحرير ${(cleanupResult.cleanedSize / 1024 / 1024).toFixed(2)} MB`);
         }
     }, 24 * 60 * 60 * 1000); // 24 ساعة
-
-    // مراقبة عمليات Chrome كل 5 دقائق
-    setInterval(monitorChromeProcesses, 10 * 60 * 1000);
-
-    // مراقبة عند بدء الخادم
-    setTimeout(monitorChromeProcesses, 10000); // بعد 10 ثوان
 
     // تحديث الأيام المتبقية للجلسات كل 6 ساعات
     setInterval(() => {
