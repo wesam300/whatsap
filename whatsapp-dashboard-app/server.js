@@ -141,17 +141,20 @@ app.use(express.json({
 // معالجة أخطاء JSON parsing - يجب أن يكون قبل استخدام apiRoutes
 app.use((err, req, res, next) => {
     if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-        console.error('JSON parsing error:', err.message);
+        const msg = (err.message || '');
+        const hint = msg.includes('control character') || msg.includes('Bad control')
+            ? 'قد يحتوي النص على أحرف تحكم (سطر جديد أو تاب). استخدم \\n أو \\t في القيمة بدلاً من الحرف الفعلي.'
+            : 'يرجى التحقق من صحة البيانات المرسلة';
+        console.error('JSON parsing error:', msg);
         console.error('Request URL:', req.url);
         console.error('Request method:', req.method);
-        // محاولة إرجاع استجابة صحيحة بدلاً من تعطيل السيرفر
         return res.status(400).json({
             success: false,
             error: 'خطأ في تنسيق JSON',
-            details: 'يرجى التحقق من صحة البيانات المرسلة'
+            details: hint,
+            code: 'INVALID_JSON'
         });
     }
-    // تمرير الأخطاء الأخرى للمعالج التالي
     next(err);
 });
 
@@ -333,13 +336,18 @@ function setupClientEventHandlers(sessionId, client) {
 
             if (!client.info) return;
 
+            // تجنّب استدعاء getChats/getContacts إذا الصفحة مغلقة (detached) لتقليل أخطاء Puppeteer في السجلات
+            try {
+                if (client.pupPage && typeof client.pupPage.isClosed === 'function' && client.pupPage.isClosed()) return;
+            } catch (_) { return; }
+
             const chats = await client.getChats().catch(() => []);
             let contacts = [];
             try {
                 contacts = await client.getContacts();
             } catch (e) {
                 // Fallback: extract from chats
-                contacts = chats.filter(c => !c.isGroup).map(c => ({
+                contacts = (chats || []).filter(c => !c.isGroup).map(c => ({
                     id: c.id._serialized,
                     pushname: c.name || c.id.user,
                     number: c.id.user
@@ -348,8 +356,8 @@ function setupClientEventHandlers(sessionId, client) {
 
             const sessionData = {
                 sessionId,
-                chats: chats.map(c => ({ id: c.id._serialized, name: c.name || c.id.user, type: c.isGroup ? 'group' : 'private' })),
-                contacts: contacts.map(c => ({ id: c.id._serialized, name: c.pushname || c.name || c.id?.user || c.number, number: c.id?.user || c.number }))
+                chats: (chats || []).map(c => ({ id: c.id._serialized, name: c.name || c.id.user, type: c.isGroup ? 'group' : 'private' })),
+                contacts: (contacts || []).map(c => ({ id: c.id._serialized, name: c.pushname || c.name || c.id?.user || c.number, number: c.id?.user || c.number }))
             };
 
             db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -357,7 +365,11 @@ function setupClientEventHandlers(sessionId, client) {
 
             io.emit('session_data', sessionData);
         } catch (error) {
-            console.error(`[${sessionId}] Error fetching initial data:`, error.message);
+            const errMsg = (error && error.message) || String(error);
+            const isDetachedOrClosed = typeof errMsg === 'string' && (errMsg.includes('detached') || errMsg.includes('Target closed'));
+            if (!isDetachedOrClosed) {
+                console.error(`[${sessionId}] Error fetching initial data:`, errMsg);
+            }
         }
     });
 

@@ -814,6 +814,11 @@
             font-size: 15px;
             font-weight: 500;
         }
+        .qr-container p.qr-refresh-hint {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #8a9ba8;
+        }
 
         .session-details {
             margin-top: 25px;
@@ -1338,8 +1343,14 @@
         function initializeSocket() {
             socket = io();
             
-            socket.on('qr_code', function(data) {
+            // استقبال QR الجديد (واتساب يحدّثه دورياً لأسباب أمنية) — الحدث الصادر من السيرفر: session_qr
+            socket.on('session_qr', function(data) {
                 updateSessionQR(data.sessionId, data.qrCode);
+            });
+
+            // جاري استعادة الجلسة تلقائياً بعد إعادة تشغيل السيرفر
+            socket.on('session_connecting', function(data) {
+                updateSessionStatus(data.sessionId, 'connecting');
             });
             
             socket.on('session_authenticated', function(data) {
@@ -1698,7 +1709,17 @@
         function createSessionCard(session) {
             const t = translations[currentLanguage];
             const statusClass = `status-${session.status}`;
-            const statusText = session.status.replace('_', ' ').toUpperCase();
+            const statusLabels = {
+                connecting: 'جاري الاتصال...',
+                loading: 'جاري التحميل...',
+                waiting_for_qr: 'انتظار QR',
+                authenticated: 'تم التحقق',
+                connected: 'متصل',
+                disconnected: 'غير متصل',
+                auth_failure: 'فشل التحقق',
+                expired: 'منتهية'
+            };
+            const statusText = statusLabels[session.status] || session.status.replace('_', ' ').toUpperCase();
             
             // حساب معلومات انتهاء الصلاحية
             const now = new Date();
@@ -1730,7 +1751,8 @@
                 qrSection = `
                     <div class="qr-container">
                         <img src="${session.qr_code}" alt="QR Code">
-                        <p>Scan this QR code with your WhatsApp app</p>
+                        <p>امسح رمز QR بتطبيق واتساب على جوالك</p>
+                        <p class="qr-refresh-hint">يُحدّث تلقائياً كل دقيقة تقريباً لأسباب أمنية</p>
                     </div>
                 `;
             }

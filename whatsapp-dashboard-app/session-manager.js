@@ -820,6 +820,9 @@ async function restoreSessions({ db, activeClients, io, Client, LocalAuth, setup
                 // Update status to connecting
                 db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('connecting', session.id);
                 sessionTracker.updateStateTimestamp(session.id);
+                if (io && typeof io.emit === 'function') {
+                    io.emit('session_connecting', { sessionId: session.id });
+                }
 
                 // Create client
                 const client = new Client({
@@ -845,7 +848,8 @@ async function restoreSessions({ db, activeClients, io, Client, LocalAuth, setup
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
             } catch (error) {
-                console.error(`[${session.id}] Failed to restore:`, error.message);
+                const errMsg = error == null ? 'unknown' : (error.message || (typeof error.toString === 'function' ? error.toString() : String(error)));
+                console.error(`[${session.id}] Failed to restore:`, errMsg);
 
                 // Remove from map first, then cleanup (avoids use of broken client)
                 const failedClient = activeClients.get(String(session.id));
