@@ -836,6 +836,23 @@
                 }
             });
             
+            socket.on('session_error', function(data) {
+                if (data.error) {
+                    console.error('Session error:', data.error);
+                    if (data.code === 'SESSION_NOT_READY') {
+                        // الجلسة غير جاهزة بعد، إعادة المحاولة بعد قليل
+                        console.log('Session not ready, retrying in 5 seconds...');
+                        setTimeout(() => {
+                            if (socket && socket.connected) {
+                                socket.emit('get_session_data', { sessionId });
+                            }
+                        }, 5000);
+                    } else {
+                        showError('خطأ في الجلسة: ' + data.error);
+                    }
+                }
+            });
+            
             socket.on('session_authenticated', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('authenticated');
@@ -1003,19 +1020,47 @@
                         document.getElementById('sessionName').textContent = session.session_name;
                         updateSessionStatus(session.status);
                         
-                        if (session.status === 'connected') {
+                        if (session.status === 'connected' || session.status === 'authenticated') {
                             // Check if we already have session data
                             if (session.session_data) {
                                 try {
-                                    sessionData = JSON.parse(session.session_data);
-                                    renderMainContent();
+                                    const parsedData = JSON.parse(session.session_data);
+                                    // التحقق من أن البيانات صحيحة وليست فارغة
+                                    if (parsedData && (parsedData.chats || parsedData.contacts)) {
+                                        sessionData = parsedData;
+                                        renderMainContent();
+                                    } else {
+                                        // البيانات فارغة، طلب بيانات جديدة
+                                        console.log('Session data is empty, requesting new data...');
+                                        if (socket && socket.connected) {
+                                            socket.emit('get_session_data', { sessionId });
+                                        } else {
+                                            // انتظار Socket.IO للاتصال
+                                            socket.once('connect', () => {
+                                                socket.emit('get_session_data', { sessionId });
+                                            });
+                                        }
+                                    }
                                 } catch (e) {
+                                    console.error('Error parsing session data:', e);
                                     // If no session data, request it
-                                    socket.emit('get_session_data', { sessionId });
+                                    if (socket && socket.connected) {
+                                        socket.emit('get_session_data', { sessionId });
+                                    } else {
+                                        socket.once('connect', () => {
+                                            socket.emit('get_session_data', { sessionId });
+                                        });
+                                    }
                                 }
                             } else {
                                 // Request session data from server
-                                socket.emit('get_session_data', { sessionId });
+                                if (socket && socket.connected) {
+                                    socket.emit('get_session_data', { sessionId });
+                                } else {
+                                    socket.once('connect', () => {
+                                        socket.emit('get_session_data', { sessionId });
+                                    });
+                                }
                             }
                         } else if (session.status === 'waiting_for_qr') {
                             document.getElementById('mainContent').innerHTML = `

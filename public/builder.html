@@ -1,164 +1,0 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Report Builder - بناء التقارير</title>
-    <link rel="stylesheet" href="css/builder.css">
-</head>
-
-<body>
-    <div class="container">
-        <header class="header">
-            <h1><i class="icon">📊</i> بناء التقارير</h1>
-            <div class="header-actions">
-                <button id="previewBtn" class="btn btn-secondary">معاينة</button>
-                <button id="saveBtn" class="btn btn-primary">حفظ التقرير</button>
-            </div>
-        </header>
-
-        <div class="builder-layout">
-            <aside class="sidebar">
-                <div class="section">
-                    <h3>معلومات التقرير</h3>
-                    <div class="form-group">
-                        <label>اسم التقرير</label>
-                        <input type="text" id="reportName" placeholder="مثال: فاتورة المبيعات">
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h3>الترويسة (Header)</h3>
-                    <div class="form-group">
-                        <label>عنوان التقرير</label>
-                        <input type="text" id="headerTitle" placeholder="مثال: فاتورة مبيعات">
-                    </div>
-                    <div class="form-group">
-                        <label>شعار الشركة (URL)</label>
-                        <input type="text" id="headerLogo" placeholder="https://...">
-                    </div>
-                    <div class="form-group">
-                        <label>اسم الشركة</label>
-                        <input type="text" id="companyName" placeholder="اسم الشركة">
-                    </div>
-                    <div class="form-group">
-                        <label>هاتف</label>
-                        <input type="text" id="companyPhone" placeholder="+249...">
-                    </div>
-                    <div class="form-group">
-                        <label>بريد إلكتروني</label>
-                        <input type="email" id="companyEmail" placeholder="info@company.com">
-                    </div>
-                    <div class="form-group">
-                        <label>عنوان</label>
-                        <input type="text" id="companyAddress" placeholder="العنوان">
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h3>حقول البيانات</h3>
-                    <div id="dataFields">
-                        <div class="field-item">
-                            <input type="text" placeholder="اسم الحقل" class="field-name">
-                            <button class="btn-remove">×</button>
-                        </div>
-                    </div>
-                    <button id="addFieldBtn" class="btn btn-small">+ إضافة حقل</button>
-                </div>
-
-                <div class="section">
-                    <h3>أعمدة الجدول</h3>
-                    <div id="tableColumns">
-                        <div class="column-item">
-                            <input type="text" placeholder="اسم العمود" class="column-label">
-                            <input type="text" placeholder="field_name" class="column-field">
-                            <button class="btn-remove">×</button>
-                        </div>
-                    </div>
-                    <button id="addColumnBtn" class="btn btn-small">+ إضافة عمود</button>
-                </div>
-
-                <div class="section">
-                    <h3>التذييل (Footer)</h3>
-                    <div class="form-group">
-                        <label>ملاحظات</label>
-                        <textarea id="footerNotes" rows="3" placeholder="شكراً لتعاملكم معنا"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="footerQR">
-                            إضافة QR Code
-                        </label>
-                    </div>
-                    <div id="signatures">
-                        <label>التوقيعات</label>
-                        <div class="signature-item">
-                            <input type="text" placeholder="مثال: المحاسب" class="signature-name">
-                            <button class="btn-remove">×</button>
-                        </div>
-                    </div>
-                    <button id="addSignatureBtn" class="btn btn-small">+ إضافة توقيع</button>
-                </div>
-
-                <div class="section">
-                    <h3>التنسيق</h3>
-                    <div class="form-group">
-                        <label>اللون الأساسي</label>
-                        <input type="color" id="primaryColor" value="#667eea">
-                    </div>
-                    <div class="form-group">
-                        <label>الخط</label>
-                        <select id="fontFamily">
-                            <option value="Arial">Arial</option>
-                            <option value="Tahoma">Tahoma</option>
-                            <option value="Segoe UI">Segoe UI</option>
-                        </select>
-                    </div>
-                </div>
-            </aside>
-
-            <main class="preview-area">
-                <div class="preview-header">
-                    <h3>معاينة التقرير</h3>
-                </div>
-                <div id="previewContent" class="preview-content">
-                    <p class="preview-placeholder">قم بملء البيانات على اليسار لرؤية المعاينة</p>
-                </div>
-            </main>
-        </div>
-    </div>
-
-    <div id="successModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>✅ تم حفظ التقرير بنجاح</h2>
-            <div class="api-info">
-                <div class="info-block">
-                    <label>Report ID:</label>
-                    <input type="text" id="reportId" readonly>
-                    <button class="btn-copy" data-target="reportId">نسخ</button>
-                </div>
-                <div class="info-block">
-                    <label>API Endpoint (إرسال WhatsApp):</label>
-                    <input type="text" id="whatsappEndpoint" readonly>
-                    <button class="btn-copy" data-target="whatsappEndpoint">نسخ</button>
-                </div>
-                <div class="info-block">
-                    <label>Download Link:</label>
-                    <input type="text" id="downloadLink" readonly>
-                    <button class="btn-copy" data-target="downloadLink">نسخ</button>
-                </div>
-            </div>
-            <div class="usage-example">
-                <h4>مثال الاستخدام من Oracle:</h4>
-                <pre id="oracleExample"></pre>
-                <button class="btn-copy" data-target="oracleExample">نسخ</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="js/builder.js"></script>
-</body>
-
-</html>

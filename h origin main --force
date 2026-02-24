@@ -1,3 +1,0 @@
-[33mc265864[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m fix: إصلاح خطأ SQLite في إنشاء الجلسات وإضافة migration للعمود expires_at
-[33m8817331[m[33m ([m[1;31morigin/main[m[33m)[m fix(server): remove stray lines causing syntax error; add limits page and notification system; update .gitignore to exclude sessions/ and local db
-[33mffa3e6e[m first commit

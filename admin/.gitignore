@@ -1,6 +1,0 @@
-node_modules/
-.env
-users.json
-logs/
-.wwebjs_auth/
-*.log

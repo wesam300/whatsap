@@ -191,6 +191,16 @@ db.exec(`
         db.prepare('ALTER TABLE sessions ADD COLUMN qr_timestamp DATETIME').run();
     } catch (e) { /* Column already exists */ }
 
+    // ترحيل آمن: عمود updated_at للجلسات (للتوافق مع نسخ إنتاج قديمة — لا يغيّر بيانات المستخدمين)
+    try {
+        const cols = db.prepare('PRAGMA table_info(sessions)').all();
+        const hasUpdatedAt = cols.some(c => c.name === 'updated_at');
+        if (!hasUpdatedAt) {
+            db.prepare('ALTER TABLE sessions ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP').run();
+            db.prepare('UPDATE sessions SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL').run();
+        }
+    } catch (e) { /* Column already exists or migration error */ }
+
     // إنشاء فهارس للبحث السريع
     db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)').run();
     db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_api_key ON api_keys(api_key)').run();

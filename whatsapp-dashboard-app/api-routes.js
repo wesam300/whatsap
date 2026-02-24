@@ -48,26 +48,34 @@ router.options('*', (req, res) => {
 
 // متغير لتخزين مرجع activeClients
 let activeClientsRef = null;
+// متغير لتخزين مرجع io
+let ioRef = null;
 
 // دالة لتعيين مرجع activeClients
 function setActiveClientsRef(activeClients) {
     activeClientsRef = activeClients;
 }
 
+// دالة لتعيين مرجع io
+function setIoRef(io) {
+    ioRef = io;
+}
+
 // دالة لإعادة تشغيل الجلسة تلقائياً عند حدوث detached Frame
 async function autoRestartSession(sessionId) {
     try {
-        console.log(`[autoRestartSession] بدء إعادة تشغيل الجلسة ${sessionId} تلقائياً...`);
+        const sessionIdStr = String(sessionId);
+        console.log(`[autoRestartSession] بدء إعادة تشغيل الجلسة ${sessionIdStr} تلقائياً...`);
         
         // 1. إيقاف الجلسة الحالية
-        if (activeClientsRef && activeClientsRef.has(sessionId)) {
-            const currentClient = activeClientsRef.get(sessionId);
+        if (activeClientsRef && activeClientsRef.has(sessionIdStr)) {
+            const currentClient = activeClientsRef.get(sessionIdStr);
             try {
                 await destroyClientCompletely(sessionId, currentClient, null);
             } catch (e) {
                 console.warn(`[autoRestartSession] تحذير في إغلاق الجلسة: ${e.message}`);
             }
-            activeClientsRef.delete(sessionId);
+            activeClientsRef.delete(sessionIdStr);
         }
 
         // 2. تنظيف مجلد الجلسة
@@ -117,17 +125,17 @@ async function autoRestartSession(sessionId) {
             puppeteer: getPuppeteerOptions()
         });
 
-        activeClientsRef.set(sessionId, client);
+        activeClientsRef.set(sessionIdStr, client);
 
         // 5. انتظار الجلسة لتكون جاهزة (timeout أقصر - 90 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 try {
                     client.destroy().catch(() => {});
                 } catch (e) {}
                 reject(new Error('Timeout waiting for session restart'));
-            }, 90000); // 90 ثانية
+            }, 120000); // 120 ثانية (زيادة الوقت)
 
             const cleanup = () => {
                 clearTimeout(timeout);
@@ -138,19 +146,19 @@ async function autoRestartSession(sessionId) {
 
             client.on('ready', () => {
                 cleanup();
-                console.log(`[autoRestartSession] ✅ تم إعادة تشغيل الجلسة ${sessionId} بنجاح`);
+                console.log(`[autoRestartSession] ✅ تم إعادة تشغيل الجلسة ${sessionIdStr} بنجاح`);
                 resolve();
             });
 
             client.on('disconnected', (reason) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 reject(new Error(`Session disconnected during restart: ${reason}`));
             });
 
             client.on('auth_failure', (msg) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 reject(new Error(`Authentication failed during restart: ${msg}`));
             });
 
@@ -158,7 +166,7 @@ async function autoRestartSession(sessionId) {
                 client.initialize();
             } catch (initError) {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 reject(new Error(`Failed to initialize: ${initError.message}`));
             }
         });
@@ -346,6 +354,27 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
     if (!client.info) {
         throw new Error('العميل غير جاهز بعد');
     }
+    
+    // إذا كانت الحالة authenticated لكن client.info موجود، نحدث الحالة إلى connected
+    // هذا يحل مشكلة الجلسات التي تصل authenticated لكن ready event لا يتم استدعاؤه
+    if (sessionId) {
+        try {
+            const session = db.prepare('SELECT status FROM sessions WHERE id = ?').get(sessionId);
+            if (session && session.status === 'authenticated' && client.info) {
+                console.log(`[${sessionId}] ✅ الجلسة جاهزة فعلياً (client.info موجود) لكن الحالة authenticated، تحديث الحالة إلى connected`);
+                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+                statusStmt.run('connected', sessionId);
+                // إرسال إشعار للواجهة
+                if (ioRef) {
+                    ioRef.emit('session_connected', { sessionId });
+                    ioRef.emit('session_ready', { sessionId });
+                }
+            }
+        } catch (statusError) {
+            // تجاهل الأخطاء في تحديث الحالة
+            console.warn(`[sendMessageSafe] تحذير في تحديث حالة الجلسة: ${statusError.message}`);
+        }
+    }
 
     // إذا لم يتم تمرير sessionId، حاول العثور عليه
     if (!sessionId && activeClientsRef) {
@@ -459,7 +488,7 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
                         await autoRestartSession(sessionId);
                         
                         // الحصول على العميل الجديد
-                        const newClient = activeClientsRef.get(sessionId);
+                        const newClient = activeClientsRef.get(String(sessionId));
                         if (newClient && newClient.info) {
                             console.log(`[sendMessageSafe] تم إعادة تشغيل الجلسة، إعادة المحاولة مع العميل الجديد...`);
                             
@@ -1065,7 +1094,7 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
         }
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1127,7 +1156,7 @@ router.get('/session-status', validateApiKeyMiddleware, validateSessionTokenMidd
         const { sessionId } = req.sessionTokenInfo;
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1221,7 +1250,7 @@ router.get('/:apiKey/session-status', validateApiKeyMiddleware, validateSessionT
         const { sessionId } = req.sessionTokenInfo;
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
+        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1762,11 +1791,13 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
             });
         }
 
+        const sessionIdStr = String(sessionId);
+        
         // إيقاف الجلسة الحالية إذا كانت موجودة
-        if (activeClientsRef && activeClientsRef.has(sessionId)) {
-            const currentClient = activeClientsRef.get(sessionId);
+        if (activeClientsRef && activeClientsRef.has(sessionIdStr)) {
+            const currentClient = activeClientsRef.get(sessionIdStr);
             await destroyClientCompletely(sessionId, currentClient, null);
-            activeClientsRef.delete(sessionId);
+            activeClientsRef.delete(sessionIdStr);
         }
 
         // إنشاء جلسة جديدة
@@ -1781,12 +1812,12 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
             puppeteer: getPuppeteerOptions()
         });
 
-        activeClientsRef.set(sessionId, client);
+        activeClientsRef.set(sessionIdStr, client);
 
         // انتظار الجلسة لتكون جاهزة (زيادة timeout إلى 120 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 try {
                     client.destroy().catch(() => {});
                 } catch (e) {
@@ -1809,7 +1840,7 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 
             client.on('disconnected', (reason) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 try {
                     client.destroy().catch(() => {});
                 } catch (e) {
@@ -1820,7 +1851,7 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 
             client.on('auth_failure', (msg) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 reject(new Error(`Authentication failed: ${msg}`));
             });
 
@@ -1828,7 +1859,7 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
                 client.initialize();
             } catch (initError) {
                 clearTimeout(timeout);
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sessionIdStr);
                 reject(new Error(`Failed to initialize client: ${initError.message}`));
             }
         });
@@ -2281,4 +2312,4 @@ router.use((error, req, res, next) => {
     next(error);
 });
 
-module.exports = { router, setActiveClientsRef };
+module.exports = { router, setActiveClientsRef, setIoRef };

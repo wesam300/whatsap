@@ -7,6 +7,16 @@
 // تحميل متغيرات البيئة
 require('dotenv').config();
 
+// Prevent process crash on Puppeteer/Chrome "Target closed" and protocol errors (handled via cleanup in session-manager)
+process.on('unhandledRejection', (reason, promise) => {
+    const msg = reason && (reason.message || String(reason));
+    const name = reason && reason.name;
+    if (name === 'TargetCloseError' || (msg && (msg.includes('Target closed') || msg.includes('Protocol error')))) {
+        console.warn('⚠️ [Puppeteer] Caught unhandled rejection (target closed/protocol error). Session cleanup will retry.', msg || name);
+        return;
+    }
+});
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -21,7 +31,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const { sendVerificationEmail, getServiceStatus } = require('./multi-email-service');
-const { router: apiRoutes, setActiveClientsRef } = require('./api-routes');
+const { router: apiRoutes, setActiveClientsRef, setIoRef } = require('./api-routes');
 const {
     createApiKey, getUserApiKeys, deleteApiKey,
     createSessionToken, getUserSessionTokens, deleteSessionToken,
@@ -156,20 +166,37 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
 }));
 
-// Store active WhatsApp clients
 const activeClients = new Map();
 
-// Store reconnection timers for sessions
-const reconnectionTimers = new Map();
-
-// Store sessions currently reconnecting
-const reconnectingSessionsSet = new Set();
-
-// تعيين مرجع activeClients في api-routes
 setActiveClientsRef(activeClients);
+setIoRef(io);
 
-// استيراد دالة إغلاق الجلسة من ملف مشترك
-const { destroyClientCompletely: destroyClientCompletelyBase, cleanupChromeZombies, getPuppeteerOptions } = require('./session-manager');
+const {
+    destroyClientCompletely: destroyClientCompletelyBase,
+    cleanupChromeZombies,
+    getPuppeteerOptions,
+    sessionTracker,
+    startSessionHeartbeat,
+    smartReconnect,
+    cleanSessionLocks,
+    restoreSessions,
+    RECONNECT_CONFIG,
+    HEALTH_CONFIG,
+} = require('./session-manager');
+
+// Reconnection helper: context passed to smartReconnect
+const sessionsDir = path.join(__dirname, 'sessions');
+function getReconnectContext() {
+    return {
+        db,
+        activeClients,
+        io,
+        Client,
+        LocalAuth,
+        setupHandlers: setupClientEventHandlers,
+        sessionsDir,
+    };
+}
 
 // دالة مساعدة لحذف مجلد الجلسة من القرص
 async function deleteSessionFolder(sessionId) {
@@ -265,496 +292,182 @@ async function getDirectorySize(dirPath) {
     return totalSize;
 }
 
-// تم نقل getPuppeteerOptions إلى session-manager.js
-
-// دالة لتنظيف مجلد جلسة معينة لحل مشكلة browser already running
-async function cleanupSessionFolder(sessionId) {
-    try {
-        const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-        const lockFile = path.join(sessionPath, 'SingletonLock');
-        const cookieFile = path.join(sessionPath, 'SingletonCookie');
-
-        // أولاً: قتل أي عمليات Chrome مرتبطة بهذه الجلسة
-        try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-
-            if (process.platform === 'linux' || process.platform === 'darwin') {
-                // البحث عن عمليات Chrome مرتبطة بهذه الجلسة
-                try {
-                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`);
-                    const pids = stdout.trim().split('\n').filter(Boolean);
-                    if (pids.length > 0) {
-                        console.log(`[${sessionId}] تم العثور على ${pids.length} عملية مرتبطة، جاري إغلاقها...`);
-                        await execAsync(`kill -9 ${pids.join(' ')}`);
-                        // انتظار قليل بعد قتل العمليات
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                } catch (e) {
-                    // لا توجد عمليات، هذا طبيعي
-                }
-            }
-        } catch (killError) {
-            console.warn(`[${sessionId}] تحذير في قتل العمليات:`, killError.message);
-        }
-
-        // ثانياً: حذف ملفات القفل
-        // محاولة حذف ملف القفل مع retry
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                await fs.unlink(lockFile);
-                console.log(`[${sessionId}] تم حذف ملف القفل (SingletonLock)`);
-                break;
-            } catch (e) {
-                if (e.code === 'ENOENT') {
-                    // الملف غير موجود، هذا جيد
-                    break;
-                } else if (e.code === 'EBUSY' || e.code === 'EACCES') {
-                    // الملف قيد الاستخدام، انتظر وحاول مرة أخرى
-                    retries--;
-                    if (retries > 0) {
-                        console.log(`[${sessionId}] انتظار قبل إعادة محاولة حذف SingletonLock...`);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    } else {
-                        console.warn(`[${sessionId}] تعذر حذف SingletonLock بعد 3 محاولات: ${e.message}`);
-                    }
-                } else {
-                    console.warn(`[${sessionId}] خطأ في حذف SingletonLock: ${e.message}`);
-                    break;
-                }
-            }
-        }
-
-        // محاولة حذف ملف الكوكيز
-        try {
-            await fs.unlink(cookieFile);
-            console.log(`[${sessionId}] تم حذف ملف القفل (SingletonCookie)`);
-        } catch (e) {
-            if (e.code !== 'ENOENT') {
-                // تجاهل أخطاء عدم الوجود
-            }
-        }
-
-        // ثالثاً: انتظار إضافي للتأكد من إغلاق جميع العمليات
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        return true;
-    } catch (error) {
-        console.error(`[${sessionId}] خطأ في تنظيف مجلد الجلسة:`, error.message);
-        return false;
-    }
-}
-
 // دالة مساعدة لإغلاق الجلسة بشكل كامل مع إغلاق عملية Chrome
 async function destroyClientCompletely(sessionId, client) {
-    // إلغاء أي محاولات إعادة اتصال
-    if (reconnectionTimers.has(String(sessionId))) {
-        clearTimeout(reconnectionTimers.get(String(sessionId)));
-        reconnectionTimers.delete(String(sessionId));
-    }
+    // تنظيف جميع المؤقتات والبيانات الوصفية عبر sessionTracker
+    sessionTracker.cleanup(sessionId);
 
     // استدعاء الدالة الأساسية
-    await destroyClientCompletelyBase(sessionId, client, reconnectionTimers);
+    await destroyClientCompletelyBase(sessionId, client);
 
     // حذف العميل من الخريطة
     activeClients.delete(String(sessionId));
 
-    // تنظيف مجلد الجلسة
-    await cleanupSessionFolder(sessionId);
+    // تنظيف مجلد الجلسة (lock files فقط)
+    await cleanSessionLocks(sessionId, sessionsDir);
 }
 
-// دالة لإعادة الاتصال التلقائي عند انقطاع الجلسة
-async function attemptReconnection(sessionId, maxRetries = 3, delay = 10000) {
-    // إلغاء أي محاولة إعادة اتصال سابقة
-    if (reconnectionTimers.has(String(sessionId))) {
-        clearTimeout(reconnectionTimers.get(String(sessionId)));
-        reconnectionTimers.delete(String(sessionId));
-    }
-
-    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-    if (!session) {
-        console.log(`[${sessionId}] الجلسة غير موجودة، إلغاء إعادة الاتصال`);
-        return;
-    }
-
-    // عدم إعادة الاتصال إذا كانت الجلسة متوقفة أو منتهية
-    if (session.status === 'expired' || session.is_paused === 1) {
-        console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إلغاء إعادة الاتصال`);
-        return;
-    }
-
-    // التحقق من انتهاء الصلاحية
-    if (session.expires_at) {
-        const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
-        if (row.expired) {
-            console.log(`[${sessionId}] الجلسة منتهية الصلاحية، إلغاء إعادة الاتصال`);
-            return;
-        }
-    }
-
-    let retryCount = 0;
-
-    const reconnect = async () => {
-        // التحقق مرة أخرى من حالة الجلسة قبل المحاولة
-        const sessionRecheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-        if (!sessionRecheck) {
-            console.log(`[${sessionId}] الجلسة غير موجودة، إلغاء إعادة الاتصال`);
-            reconnectionTimers.delete(String(sessionId));
-            return;
-        }
-
-        if (sessionRecheck.is_paused === 1 || sessionRecheck.status === 'expired') {
-            console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إلغاء إعادة الاتصال`);
-            reconnectionTimers.delete(String(sessionId));
-            return;
-        }
-
-        if (activeClients.has(String(sessionId))) {
-            console.log(`[${sessionId}] الجلسة نشطة بالفعل، إلغاء إعادة الاتصال`);
-            reconnectionTimers.delete(String(sessionId));
-            return;
-        }
-
-        retryCount++;
-        console.log(`[${sessionId}] محاولة إعادة الاتصال (${retryCount}/${maxRetries})...`);
-
-        try {
-            // انتظار إضافي للتأكد من إغلاق المتصفح السابق
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // تنظيف مجلد الجلسة لحل browser already running
-            await cleanupSessionFolder(sessionId);
-
-            const { Client, LocalAuth } = require('whatsapp-web.js');
-            const path = require('path');
-
-            const client = new Client({
-                authStrategy: new LocalAuth({
-                    clientId: `session_${sessionId}`,
-                    dataPath: path.join(__dirname, 'sessions')
-                }),
-                puppeteer: getPuppeteerOptions()
-            });
-
-            activeClients.set(String(sessionId), client);
-
-            // إعداد معالجات الأحداث
-            setupClientEventHandlers(sessionId, client);
-
-            await client.initialize();
-
-            console.log(`[${sessionId}] تم إعادة الاتصال بنجاح`);
-            reconnectionTimers.delete(String(sessionId));
-        } catch (error) {
-            console.error(`[${sessionId}] فشل إعادة الاتصال:`, error.message);
-
-            // إزالة العميل من activeClients في حالة الفشل
-            if (activeClients.has(String(sessionId))) {
-                activeClients.delete(String(sessionId));
-            }
-
-            if (retryCount < maxRetries) {
-                const timer = setTimeout(reconnect, delay);
-                reconnectionTimers.set(String(sessionId), timer);
-            } else {
-                console.log(`[${sessionId}] تم استنفاد محاولات إعادة الاتصال`);
-                reconnectionTimers.delete(String(sessionId));
-
-                // تحديث الحالة في قاعدة البيانات
-                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                statusStmt.run('disconnected', sessionId);
-            }
-        }
-    };
-
-    // تأخير أولي أطول للتأكد من إغلاق المتصفح السابق
-    const timer = setTimeout(reconnect, delay);
-    reconnectionTimers.set(String(sessionId), timer);
-}
-
-// دالة لإعداد معالجات الأحداث للعميل
+// دالة لإعداد معالجات الأحداث للعميل (احترافي - بدون تسرب ذاكرة)
 function setupClientEventHandlers(sessionId, client) {
+    // ── authenticated ──
     client.on('authenticated', () => {
-        console.log(`[${sessionId}] تم التحقق من الهوية`);
-        const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-        statusStmt.run('authenticated', sessionId);
+        console.log(`[${sessionId}] ✅ Authenticated`);
+        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('authenticated', sessionId);
         io.emit('session_authenticated', { sessionId });
+        sessionTracker.updateStateTimestamp(sessionId);
     });
 
+    // ── ready ──
     client.on('ready', async () => {
-        console.log(`[${sessionId}] الجلسة جاهزة`);
-        const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-        statusStmt.run('connected', sessionId);
+        console.log(`[${sessionId}] ✅ Session READY`);
+        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('connected', sessionId);
         io.emit('session_connected', { sessionId });
+        io.emit('session_ready', { sessionId });
+        sessionTracker.updateStateTimestamp(sessionId);
+        sessionTracker.resetReconnect(sessionId);
 
-        // إلغاء أي محاولات إعادة اتصال
-        if (reconnectionTimers.has(String(sessionId))) {
-            clearTimeout(reconnectionTimers.get(String(sessionId)));
-            reconnectionTimers.delete(String(sessionId));
+        // Fetch session data (chats/contacts)
+        try {
+            // Wait slightly for WhatsApp to settle
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            if (!client.info) return;
+
+            const chats = await client.getChats().catch(() => []);
+            let contacts = [];
+            try {
+                contacts = await client.getContacts();
+            } catch (e) {
+                // Fallback: extract from chats
+                contacts = chats.filter(c => !c.isGroup).map(c => ({
+                    id: c.id._serialized,
+                    pushname: c.name || c.id.user,
+                    number: c.id.user
+                }));
+            }
+
+            const sessionData = {
+                sessionId,
+                chats: chats.map(c => ({ id: c.id._serialized, name: c.name || c.id.user, type: c.isGroup ? 'group' : 'private' })),
+                contacts: contacts.map(c => ({ id: c.id._serialized, name: c.pushname || c.name || c.id?.user || c.number, number: c.id?.user || c.number }))
+            };
+
+            db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+                .run(JSON.stringify(sessionData), sessionId);
+
+            io.emit('session_data', sessionData);
+        } catch (error) {
+            console.error(`[${sessionId}] Error fetching initial data:`, error.message);
         }
     });
 
+    // ── message storage ──
+    if (!DISABLE_MESSAGE_STORAGE) {
+        client.on('message', async (msg) => {
+            try {
+                const insert = db.prepare(`
+                    INSERT OR IGNORE INTO messages (
+                        session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, media_base64, sender, receiver, timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                `);
+
+                let mediaBase64 = null, mediaMime = null, hasMedia = false;
+                if (msg.hasMedia) {
+                    try {
+                        const media = await msg.downloadMedia();
+                        if (media) {
+                            mediaBase64 = media.data;
+                            mediaMime = media.mimetype;
+                            hasMedia = true;
+                        }
+                    } catch (_) { }
+                }
+
+                const chatId = msg.from?._serialized || msg.from || '';
+                const messageId = msg.id?._serialized || msg.id || `${Date.now()}`;
+
+                insert.run(
+                    String(sessionId), String(chatId), String(messageId),
+                    msg.fromMe ? 1 : 0, String(msg.type || 'chat'), String(msg.body || ''),
+                    hasMedia ? 1 : 0, mediaMime, mediaBase64,
+                    String(msg.from?._serialized || msg.from || ''),
+                    String(msg.to?._serialized || msg.to || '')
+                );
+            } catch (e) {
+                console.error(`[${sessionId}] Message save error:`, e.message);
+            }
+        });
+    }
+
+    // ── disconnected ──
     client.on('disconnected', async (reason) => {
-        console.log(`[${sessionId}] انقطاع الاتصال - السبب: ${reason}`);
+        console.log(`[${sessionId}] ❌ Disconnected - Reason: ${reason}`);
 
-        // منع محاولات إعادة اتصال متعددة
-        if (reconnectingSessionsSet.has(String(sessionId))) {
-            console.log(`[${sessionId}] إعادة اتصال قيد التنفيذ، تخطي...`);
-            return;
-        }
+        if (sessionTracker.isReconnecting(sessionId)) return;
 
-        // التحقق من حالة الجلسة في قاعدة البيانات قبل الإغلاق
         const sessionCheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-        if (!sessionCheck) {
-            console.log(`[${sessionId}] الجلسة غير موجودة في قاعدة البيانات، إلغاء المعالجة`);
-            return;
-        }
+        if (!sessionCheck) return;
 
-        // إذا كانت الجلسة متوقفة أو منتهية، لا نحاول إعادة الاتصال
         if (sessionCheck.is_paused === 1 || sessionCheck.status === 'expired') {
-            console.log(`[${sessionId}] الجلسة متوقفة أو منتهية، إغلاق نهائي`);
             await destroyClientCompletely(sessionId, client);
             return;
         }
 
-        // تحديث الحالة فوراً
-        const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-        statusStmt.run('disconnected', sessionId);
+        db.prepare('UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('disconnected', sessionId);
         io.emit('session_disconnected', { sessionId, reason });
+        sessionTracker.updateStateTimestamp(sessionId);
 
-        // إغلاق العميل بشكل كامل
         await destroyClientCompletely(sessionId, client);
 
-        // محاولة إعادة الاتصال تلقائياً (فقط إذا لم يكن السبب LOGGED_OUT أو NAVIGATION)
         if (reason !== 'LOGGED_OUT' && reason !== 'NAVIGATION') {
-            reconnectingSessionsSet.add(String(sessionId));
-
-            try {
-                // انتظار أطول للتأكد من إغلاق Chrome بالكامل
-                await new Promise(resolve => setTimeout(resolve, 5000));
-
-                // التحقق مرة أخرى من حالة الجلسة قبل إعادة الاتصال
-                const sessionRecheck = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-                if (sessionRecheck && sessionRecheck.is_paused !== 1 && sessionRecheck.status !== 'expired') {
-                    console.log(`[${sessionId}] بدء إعادة الاتصال...`);
-                    await attemptReconnection(sessionId, 3, 15000);
-                }
-            } finally {
-                reconnectingSessionsSet.delete(String(sessionId));
-            }
-        } else {
-            console.log(`[${sessionId}] لا يمكن إعادة الاتصال - السبب: ${reason}`);
+            smartReconnect(sessionId, getReconnectContext());
         }
     });
 
+    // ── auth_failure, qr, loading_screen ──
     client.on('auth_failure', (msg) => {
-        console.log(`[${sessionId}] فشل التحقق من الهوية: ${msg}`);
-        const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-        statusStmt.run('auth_failure', sessionId);
+        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('auth_failure', sessionId);
         io.emit('session_auth_failure', { sessionId, error: msg });
+        sessionTracker.updateStateTimestamp(sessionId);
     });
 
     client.on('qr', async (qr) => {
         try {
             const qrCodeDataURL = await QRCode.toDataURL(qr);
-            const qrTimestamp = new Date().toISOString();
+            db.prepare('UPDATE sessions SET qr_code = ?, qr_timestamp = ?, status = ? WHERE id = ?')
+                .run(qrCodeDataURL, new Date().toISOString(), 'waiting_for_qr', sessionId);
 
-            console.log(`[${sessionId}] QR Code جديد`);
-
-            // تحديث QR Code في قاعدة البيانات
-            const qrStmt = db.prepare('UPDATE sessions SET qr_code = ?, qr_timestamp = ? WHERE id = ?');
-            qrStmt.run(qrCodeDataURL, qrTimestamp, sessionId);
-
-            // إرسال QR Code للواجهة
-            io.emit('session_qr', {
-                sessionId: sessionId,
-                qrCode: qrCodeDataURL,
-                timestamp: qrTimestamp
-            });
-        } catch (error) {
-            console.error(`[${sessionId}] خطأ في توليد QR Code:`, error);
-        }
+            io.emit('session_qr', { sessionId, qrCode: qrCodeDataURL, timestamp: new Date().toISOString() });
+            sessionTracker.updateStateTimestamp(sessionId);
+        } catch (e) { }
     });
 
     client.on('loading_screen', (percent, message) => {
-        console.log(`[${sessionId}] تحميل: ${percent}% - ${message}`);
+        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('loading', sessionId);
+        io.emit('session_loading', { sessionId, percent, message });
+        sessionTracker.updateStateTimestamp(sessionId);
+    });
 
-        // تحديث الحالة
-        const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-        statusStmt.run('loading', sessionId);
-
-        // إرسال تحديث التحميل للواجهة
-        io.emit('session_loading', {
-            sessionId: sessionId,
-            percent: percent,
-            message: message
-        });
+    // ── Start heartbeat ──
+    startSessionHeartbeat(sessionId, {
+        db, activeClients, io,
+        onReconnect: (sid) => smartReconnect(sid, getReconnectContext()),
     });
 }
 
-// إعادة تشغيل الجلسات المتصلة عند بدء الخادم
-async function restartConnectedSessions() {
-    try {
-        const connectedSessionsStmt = db.prepare('SELECT * FROM sessions WHERE status = ?');
-        const connectedSessions = connectedSessionsStmt.all('connected');
 
-        console.log(`إعادة تشغيل ${connectedSessions.length} جلسة متصلة...`);
 
-        for (const session of connectedSessions) {
-            try {
-                const { Client, LocalAuth } = require('whatsapp-web.js');
-                const path = require('path');
 
-                const client = new Client({
-                    authStrategy: new LocalAuth({
-                        clientId: `session_${session.id}`,
-                        dataPath: path.join(__dirname, 'sessions')
-                    }),
-                    puppeteer: getPuppeteerOptions()
-                });
 
-                activeClients.set(String(session.id), client);
 
-                // استخدام دالة إعداد معالجات الأحداث
-                setupClientEventHandlers(session.id, client);
 
-                // إضافة معالجات إضافية للجلسات المعاد تشغيلها
-                client.on('qr', async (qr) => {
-                    console.log(`QR Code للجلسة ${session.id} (${session.session_name})`);
 
-                    try {
-                        const qrCodeDataURL = await QRCode.toDataURL(qr);
 
-                        // تحديث QR Code في قاعدة البيانات
-                        const qrStmt = db.prepare('UPDATE sessions SET qr_code = ? WHERE id = ?');
-                        qrStmt.run(qrCodeDataURL, session.id);
-
-                        // إرسال QR Code للواجهة
-                        io.emit('session_qr', {
-                            sessionId: session.id,
-                            sessionName: session.session_name,
-                            qrCode: qrCodeDataURL
-                        });
-                    } catch (error) {
-                        console.error('خطأ في توليد QR Code:', error);
-                    }
-                });
-
-                client.on('loading_screen', (percent, message) => {
-                    console.log(`تحميل الجلسة ${session.id} (${session.session_name}): ${percent}% - ${message}`);
-
-                    // إرسال تحديث التحميل للواجهة
-                    io.emit('session_loading', {
-                        sessionId: session.id,
-                        sessionName: session.session_name,
-                        percent: percent,
-                        message: message
-                    });
-                });
-
-                client.initialize();
-
-                // انتظار قليل بين كل جلسة
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-            } catch (error) {
-                console.error(`خطأ في إعادة تشغيل الجلسة ${session.id}:`, error);
-            }
-        }
-    } catch (error) {
-        console.error('خطأ في إعادة تشغيل الجلسات المتصلة:', error);
-    }
-}
-
-// دالة لإعادة تشغيل الجلسات التي لديها بيانات موجودة لكن حالتها disconnected
-async function restoreDisconnectedSessionsWithData() {
-    try {
-        console.log('🔍 البحث عن جلسات منفصلة لديها بيانات موجودة...');
-
-        // الحصول على جميع الجلسات التي حالتها disconnected
-        const disconnectedSessionsStmt = db.prepare('SELECT * FROM sessions WHERE status = ? OR status = ?');
-        const disconnectedSessions = disconnectedSessionsStmt.all('disconnected', 'connecting');
-
-        let restoredCount = 0;
-
-        for (const session of disconnectedSessions) {
-            try {
-                // التحقق من وجود بيانات الجلسة
-                const sessionPath = path.join(__dirname, 'sessions', `session-session_${session.id}`);
-                const sessionDataExists = await fs.access(sessionPath).then(() => true).catch(() => false);
-
-                if (sessionDataExists) {
-                    console.log(`[${session.id}] تم العثور على بيانات الجلسة، محاولة إعادة الاتصال...`);
-
-                    // التحقق من انتهاء الصلاحية
-                    let shouldRestore = true;
-                    if (session.expires_at) {
-                        const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
-                        if (row.expired) {
-                            console.log(`[${session.id}] الجلسة منتهية الصلاحية، تخطي...`);
-                            shouldRestore = false;
-                        }
-                    }
-
-                    // التحقق من أن الجلسة ليست متوقفة
-                    if (session.is_paused === 1) {
-                        console.log(`[${session.id}] الجلسة متوقفة، تخطي...`);
-                        shouldRestore = false;
-                    }
-
-                    if (shouldRestore && !activeClients.has(String(session.id))) {
-                        try {
-                            // تنظيف مجلد الجلسة أولاً
-                            await cleanupSessionFolder(session.id);
-
-                            const { Client, LocalAuth } = require('whatsapp-web.js');
-
-                            const client = new Client({
-                                authStrategy: new LocalAuth({
-                                    clientId: `session_${session.id}`,
-                                    dataPath: path.join(__dirname, 'sessions')
-                                }),
-                                puppeteer: getPuppeteerOptions()
-                            });
-
-                            activeClients.set(String(session.id), client);
-
-                            // استخدام دالة إعداد معالجات الأحداث
-                            setupClientEventHandlers(session.id, client);
-
-                            // تحديث الحالة إلى connecting
-                            const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                            updateStmt.run('connecting', session.id);
-
-                            // بدء التهيئة
-                            client.initialize();
-
-                            restoredCount++;
-
-                            // انتظار قليل بين كل جلسة
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-
-                        } catch (error) {
-                            console.error(`[${session.id}] خطأ في إعادة الاتصال:`, error.message);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error(`[${session.id}] خطأ في فحص الجلسة:`, error.message);
-            }
-        }
-
-        if (restoredCount > 0) {
-            console.log(`✅ تم إعادة تشغيل ${restoredCount} جلسة منفصلة لديها بيانات موجودة`);
-        } else {
-            console.log('ℹ️ لم يتم العثور على جلسات منفصلة لديها بيانات موجودة');
-        }
-
-    } catch (error) {
-        console.error('خطأ في استعادة الجلسات المنفصلة:', error);
-    }
+// ── Startup Session Restoration ──
+// Use the new single robust restore function
+async function performSessionRestoration() {
+    console.log('🔄 Starting session restoration process...');
+    await restoreSessions(getReconnectContext());
 }
 
 // دالة لمراقبة وتنظيف عمليات Chrome الزائدة
@@ -1110,7 +823,6 @@ app.put('/api/admin/sessions/:sessionId/settings', requireAuth, requireAdmin, (r
     }
 });
 
-// تمديد الجلسة (للمدير)
 app.post('/api/admin/sessions/:sessionId/extend', requireAuth, requireAdmin, (req, res) => {
     try {
         const { sessionId } = req.params;
@@ -1251,7 +963,7 @@ app.post('/api/admin/sessions/:id/restart', requireAuth, requireAdmin, (req, res
     try {
         const sessionId = req.params.id;
         // إعادة تعيين حالة الجلسة
-        db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('disconnected', sessionId);
+        db.prepare('UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('disconnected', sessionId);
         res.json({ success: true, message: 'تم إعادة تعيين الجلسة' });
     } catch (error) {
         console.error('Error restarting session:', error);
@@ -1447,11 +1159,11 @@ app.post('/api/admin/users/:userId/toggle', requireAuth, requireAdmin, async (re
                 const sessionId = String(session.id);
                 if (activeClients.has(sessionId)) {
                     const client = activeClients.get(sessionId);
-                    await destroyClientCompletely(sessionId, client, activeClients, false);
+                    await destroyClientCompletely(sessionId, client);
                 }
             }
             // تحديث حالة الجلسات إلى disconnected
-            db.prepare('UPDATE sessions SET status = ? WHERE user_id = ?').run('disconnected', userId);
+            db.prepare('UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?').run('disconnected', userId);
             console.log(`✅ تم إيقاف المستخدم ${userId} (${row.username}) وإغلاق جميع جلساته من قبل الأدمن ${req.user.username}`);
         } else {
             console.log(`✅ تم تفعيل المستخدم ${userId} (${row.username}) من قبل الأدمن ${req.user.username}`);
@@ -1486,7 +1198,7 @@ app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, re
             const sessionId = String(session.id);
             if (activeClients.has(sessionId)) {
                 const client = activeClients.get(sessionId);
-                await destroyClientCompletely(sessionId, client, activeClients, false);
+                await destroyClientCompletely(sessionId, client);
             }
         }
 
@@ -1536,6 +1248,115 @@ app.post('/api/admin/users/:userId/logout', requireAuth, requireAdmin, async (re
 });
 
 // تم دمج هذا المسار مع المسار السابق - لا حاجة للتكرار
+
+// ========================================
+// مسارات Profile/User Settings
+// ========================================
+
+// الحصول على بيانات المستخدم الشخصية
+app.get('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        if (!ensureUserIsActive(req, res)) return;
+
+        const user = db.prepare('SELECT id, username, email, created_at, is_active, max_sessions FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+
+        // عدد الجلسات
+        const sessionsCount = db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = ?').get(userId).count;
+
+        res.json({
+            success: true,
+            user: {
+                ...user,
+                sessions_count: sessionsCount
+            }
+        });
+    } catch (error) {
+        console.error('Error getting user profile:', error);
+        res.status(500).json({ success: false, error: 'فشل في جلب بيانات المستخدم' });
+    }
+});
+
+// تحديث بيانات المستخدم الشخصية
+app.put('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        if (!ensureUserIsActive(req, res)) return;
+
+        const { username, email } = req.body;
+
+        if (!username || !email) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم والبريد الإلكتروني مطلوبان' });
+        }
+
+        // التحقق من صحة البريد الإلكتروني
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ success: false, error: 'البريد الإلكتروني غير صحيح' });
+        }
+
+        // التحقق من عدم تعارض البريد/الاسم مع مستخدم آخر
+        const conflict = db.prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?').get(username, email, userId);
+        if (conflict) {
+            return res.status(400).json({ success: false, error: 'اسم المستخدم أو البريد الإلكتروني مستخدم من حساب آخر' });
+        }
+
+        // تحديث البيانات
+        const result = db.prepare('UPDATE users SET username = ?, email = ? WHERE id = ?').run(username, email, userId);
+
+        if (result.changes > 0) {
+            console.log(`✅ تم تحديث بيانات المستخدم ${userId} (${username})`);
+            res.json({ success: true, message: 'تم تحديث البيانات بنجاح' });
+        } else {
+            res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        res.status(500).json({ success: false, error: 'فشل في تحديث البيانات' });
+    }
+});
+
+// تغيير كلمة المرور
+app.post('/api/user/change-password', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        if (!ensureUserIsActive(req, res)) return;
+
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, error: 'كلمة المرور الحالية والجديدة مطلوبتان' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+        }
+
+        // التحقق من كلمة المرور الحالية
+        const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+        if (!isValidPassword) {
+            return res.status(400).json({ success: false, error: 'كلمة المرور الحالية غير صحيحة' });
+        }
+
+        // تحديث كلمة المرور
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
+        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newPasswordHash, userId);
+
+        console.log(`✅ تم تغيير كلمة مرور المستخدم ${userId}`);
+        res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
+    } catch (error) {
+        console.error('Error changing password:', error);
+        res.status(500).json({ success: false, error: 'فشل في تغيير كلمة المرور' });
+    }
+});
 
 // ========================================
 // مسارات API
@@ -2136,6 +1957,54 @@ app.get('/api/sessions/:id', requireAuth, (req, res) => {
     }
 });
 
+// التحقق من الحالة الحقيقية للجلسة (لإعادة الاتصال التلقائي)
+app.get('/api/sessions/:id/check-status', requireAuth, async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const userId = req.session.userId;
+        if (!ensureUserIsActive(req, res)) return;
+
+        // التحقق من أن الجلسة تخص المستخدم
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(sessionId, userId);
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
+        }
+
+        // التحقق من الحالة الحقيقية
+        const hasActiveClient = activeClients.has(String(sessionId));
+        let actualStatus = session.status;
+
+        if (hasActiveClient) {
+            const client = activeClients.get(String(sessionId));
+            if (client.info) {
+                actualStatus = 'connected';
+            } else if (client.state === 'READY') {
+                actualStatus = 'connected';
+            } else if (client.state === 'OPENING') {
+                actualStatus = 'connecting';
+            }
+        }
+
+        // التحقق من وجود بيانات الجلسة
+        const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+        const hasSessionData = await fs.access(sessionPath).then(() => true).catch(() => false);
+
+        res.json({
+            success: true,
+            sessionId: sessionId,
+            currentStatus: session.status,
+            actualStatus: actualStatus,
+            hasActiveClient: hasActiveClient,
+            hasSessionData: hasSessionData,
+            isExpired: session.expires_at ? new Date(session.expires_at) <= new Date() : false,
+            isPaused: session.is_paused === 1
+        });
+    } catch (error) {
+        console.error('Error checking session status:', error);
+        res.status(500).json({ success: false, error: 'فشل في التحقق من حالة الجلسة' });
+    }
+});
+
 app.delete('/api/sessions/:id', requireAuth, async (req, res) => {
     try {
         const sessionId = req.params.id;
@@ -2174,17 +2043,13 @@ io.on('connection', (socket) => {
     socket.on('start_session', async (data) => {
         try {
             const { sessionId, forceNewQR = false } = data;
-
-            // Check if session exists and belongs to user
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
+            const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
 
             if (!session) {
                 socket.emit('session_error', { error: 'Session not found' });
                 return;
             }
 
-            // منع بدء جلسة منتهية الصلاحية
             if (session.expires_at) {
                 const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
                 if (row.expired) {
@@ -2193,274 +2058,37 @@ io.on('connection', (socket) => {
                 }
             }
 
-            // إذا كانت الجلسة نشطة، قم بإيقافها أولاً
             if (activeClients.has(String(sessionId))) {
-                console.log(`Stopping existing session ${sessionId} before restart...`);
-                const existingClient = activeClients.get(String(sessionId));
-                await destroyClientCompletely(sessionId, existingClient);
+                await destroyClientCompletely(sessionId, activeClients.get(String(sessionId)));
             }
 
-            // حذف بيانات الجلسة فقط إذا طُلب QR جديد صراحة (forceNewQR = true)
-            // لا نحذف البيانات إذا كانت الجلسة متصلة سابقاً أو إذا كان مجلد الجلسة موجوداً
-            if (forceNewQR) {
-                try {
-                    const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-                    const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
-
-                    if (sessionExists) {
-                        console.log(`[${sessionId}] حذف بيانات الجلسة القديمة لطلب QR جديد...`);
-                        await fs.rm(sessionPath, { recursive: true, force: true });
-                    }
-                } catch (error) {
-                    console.error(`[${sessionId}] خطأ في حذف بيانات الجلسة: ${error.message}`);
-                    // لا نوقف العملية إذا فشل الحذف
-                }
-            } else if (session.status === 'auth_failure') {
-                // فقط في حالة فشل المصادقة، نحذف البيانات لإجبار QR جديد
-                try {
-                    const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-                    const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
-
-                    if (sessionExists) {
-                        console.log(`[${sessionId}] حذف بيانات الجلسة بسبب فشل المصادقة...`);
-                        await fs.rm(sessionPath, { recursive: true, force: true });
-                    }
-                } catch (error) {
-                    console.error(`[${sessionId}] خطأ في حذف بيانات الجلسة: ${error.message}`);
-                }
-            } else {
-                // إذا كانت الجلسة متصلة سابقاً، نحاول استخدام البيانات الموجودة
-                const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-                const sessionExists = await fs.access(sessionPath).then(() => true).catch(() => false);
-
-                if (sessionExists && session.status === 'disconnected') {
-                    console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة...`);
-                }
-            }
-
-            // التحقق من وجود بيانات الجلسة
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
-            const sessionDataExists = await fs.access(sessionPath).then(() => true).catch(() => false);
-
-            // إذا كانت بيانات الجلسة موجودة ولم يُطلب QR جديد، نحاول الاتصال مباشرة
-            if (sessionDataExists && !forceNewQR && session.status !== 'auth_failure') {
-                console.log(`[${sessionId}] محاولة إعادة الاتصال باستخدام بيانات الجلسة الموجودة (الحالة السابقة: ${session.status})...`);
-                // تحديث الحالة إلى connecting - سيحاول Client استخدام البيانات الموجودة تلقائياً
-                const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                updateStmt.run('connecting', sessionId);
-                // لا نحذف QR code القديم لأنه قد لا يكون مطلوباً
-            } else {
-                // إذا طُلب QR جديد أو فشلت المصادقة، نحذف QR القديم ونضع الحالة على waiting_for_qr
-                if (forceNewQR || session.status === 'auth_failure') {
-                    const clearQRStmt = db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?');
-                    clearQRStmt.run(sessionId);
-                    console.log(`[${sessionId}] طلب QR جديد (forceNewQR: ${forceNewQR}, auth_failure: ${session.status === 'auth_failure'})`);
-                }
-
-                // Update status to waiting for QR
-                const updateStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                updateStmt.run('waiting_for_qr', sessionId);
+            if (forceNewQR || session.status === 'auth_failure') {
+                try {
+                    await fs.rm(sessionPath, { recursive: true, force: true }).catch(() => { });
+                    db.prepare('UPDATE sessions SET qr_code = NULL, status = ? WHERE id = ?').run('waiting_for_qr', sessionId);
+                } catch (e) { }
             }
 
-            // Create WhatsApp client
             const client = new Client({
-                authStrategy: new LocalAuth({
-                    clientId: `session_${sessionId}`,
-                    dataPath: path.join(__dirname, 'sessions')
-                }),
+                authStrategy: new LocalAuth({ clientId: `session_${sessionId}`, dataPath: path.join(__dirname, 'sessions') }),
                 puppeteer: getPuppeteerOptions()
             });
 
             activeClients.set(String(sessionId), client);
-
-            // استخدام دالة إعداد معالجات الأحداث الأساسية
             setupClientEventHandlers(sessionId, client);
 
-            // إضافة معالجات إضافية للـ socket
-            client.on('qr', async (qr) => {
-                try {
-                    const qrCode = await QRCode.toDataURL(qr);
-                    const qrTimestamp = new Date().toISOString();
-
-                    console.log(`New QR code generated for session ${sessionId} at ${qrTimestamp}`);
-
-                    socket.emit('qr_code', {
-                        sessionId,
-                        qrCode,
-                        timestamp: qrTimestamp
-                    });
-                } catch (error) {
-                    console.error('QR generation error:', error);
+            client.initialize().catch(async (err) => {
+                console.error(`[${sessionId}] Init error:`, err.message);
+                if (activeClients.has(String(sessionId))) {
+                    const failed = activeClients.get(String(sessionId));
+                    activeClients.delete(String(sessionId));
+                    try { await destroyClientCompletely(sessionId, failed); } catch (e) { /* ignore */ }
                 }
+                db.prepare('UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('disconnected', sessionId);
+                io.emit('session_disconnected', { sessionId, reason: 'INIT_FAILED' });
+                socket.emit('session_error', { error: 'فشل تهيئة الجلسة', code: 'INIT_FAILED' });
             });
-
-            client.on('ready', async () => {
-                socket.emit('session_ready', { sessionId });
-
-                // Get contacts and chats
-                try {
-                    const chats = await client.getChats().catch(err => {
-                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات:`, err.message);
-                        return [];
-                    });
-
-                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
-                    let contacts = [];
-                    try {
-                        contacts = await client.getContacts();
-                    } catch (error) {
-                        // إذا فشل getContacts بسبب getIsMyContact، نحاول الحصول على جهات الاتصال من المحادثات
-                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (${error.message})، سيتم استخدام المحادثات بدلاً منها`);
-                        // استخراج جهات الاتصال من المحادثات
-                        contacts = chats
-                            .filter(chat => !chat.isGroup)
-                            .map(chat => ({
-                                id: chat.id._serialized,
-                                pushname: chat.name || chat.id.user,
-                                number: chat.id.user
-                            }));
-                    }
-
-                    const sessionData = {
-                        sessionId,
-                        chats: chats.map(chat => ({
-                            id: chat.id._serialized,
-                            name: chat.name || chat.id.user,
-                            type: chat.isGroup ? 'group' : 'private'
-                        })),
-                        contacts: contacts.map(contact => ({
-                            id: contact.id._serialized,
-                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
-                            number: contact.id?.user || contact.number
-                        }))
-                    };
-
-                    // Save session data to database
-                    const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-                    sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
-
-                    socket.emit('session_data', sessionData);
-                } catch (error) {
-                    console.error(`[${sessionId}] خطأ في الحصول على بيانات الجلسة:`, error.message);
-                }
-            });
-
-            // Add a fallback: if authenticated event is fired, also emit session_ready
-            client.on('authenticated', async () => {
-                socket.emit('session_ready', { sessionId });
-
-                // Also try to get session data as fallback
-                try {
-                    // انتظار حتى يكون العميل جاهزاً تماماً
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // التحقق من أن العميل جاهز
-                    if (!client.info) {
-                        console.log(`Session ${sessionId} not ready yet, skipping data fetch`);
-                        return;
-                    }
-
-                    const chats = await client.getChats().catch(err => {
-                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات (authenticated fallback):`, err.message);
-                        return [];
-                    });
-
-                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
-                    let contacts = [];
-                    try {
-                        contacts = await client.getContacts();
-                    } catch (error) {
-                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (authenticated fallback) (${error.message})`);
-                        // استخراج جهات الاتصال من المحادثات
-                        contacts = chats
-                            .filter(chat => !chat.isGroup)
-                            .map(chat => ({
-                                id: chat.id._serialized,
-                                pushname: chat.name || chat.id.user,
-                                number: chat.id.user
-                            }));
-                    }
-
-                    const sessionData = {
-                        sessionId,
-                        chats: chats.map(chat => ({
-                            id: chat.id._serialized,
-                            name: chat.name || chat.id.user,
-                            type: chat.isGroup ? 'group' : 'private'
-                        })),
-                        contacts: contacts.map(contact => ({
-                            id: contact.id._serialized,
-                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
-                            number: contact.id?.user || contact.number
-                        }))
-                    };
-
-                    // Save session data to database
-                    const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-                    sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
-
-                    socket.emit('session_data', sessionData);
-                } catch (error) {
-                    console.error('Error getting session data in authenticated fallback:', error);
-                }
-            });
-
-            client.on('disconnected', async (reason) => {
-                socket.emit('session_disconnected', { sessionId, reason });
-            });
-
-            // الاستماع للرسائل الواردة: تعطيل التخزين نهائياً وعدم تنزيل الميديا عند تفعيل DISABLE_MESSAGE_STORAGE
-            if (DISABLE_MESSAGE_STORAGE) {
-                client.on('message', (msg) => {
-                    // تم التعطيل بناءً على الإعداد؛ عدم تخزين الرسائل أو تنزيل الميديا
-                });
-            } else {
-                client.on('message', async (msg) => {
-                    try {
-                        const insert = db.prepare(`
-                            INSERT OR IGNORE INTO messages (
-                                session_id, chat_id, message_id, from_me, type, body, has_media, media_mime_type, media_base64, sender, receiver, timestamp
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                        `);
-                        let mediaBase64 = null;
-                        let mediaMime = null;
-                        let hasMedia = false;
-                        if (msg.hasMedia) {
-                            try {
-                                const media = await msg.downloadMedia();
-                                if (media) {
-                                    mediaBase64 = media.data;
-                                    mediaMime = media.mimetype;
-                                    hasMedia = true;
-                                }
-                            } catch (_) { }
-                        }
-                        const chatId = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
-                        const messageId = (typeof msg.id === 'object' && msg.id !== null) ? msg.id._serialized : (msg.id || `${Date.now()}-${Math.random()}`);
-                        const sender = (typeof msg.from === 'object' && msg.from !== null) ? msg.from._serialized : (msg.from || '');
-                        const receiver = (typeof msg.to === 'object' && msg.to !== null) ? msg.to._serialized : (msg.to || '');
-                        const safeValues = [
-                            String(sessionId),
-                            String(chatId),
-                            String(messageId),
-                            msg.fromMe ? 1 : 0,
-                            String(msg.type || 'chat'),
-                            String(msg.body || ''),
-                            hasMedia ? 1 : 0,
-                            mediaMime ? String(mediaMime) : null,
-                            mediaBase64 ? String(mediaBase64) : null,
-                            String(sender),
-                            String(receiver)
-                        ];
-                        console.log('Saving message with values:', safeValues.map((v, i) => `${i}: ${typeof v} = ${v}`).join(', '));
-                        insert.run(...safeValues);
-                    } catch (e) {
-                        console.error('فشل في حفظ الرسالة الواردة:', e.message);
-                    }
-                });
-            }
-
-            client.initialize();
 
         } catch (error) {
             console.error('Session start error:', error);
@@ -2471,19 +2099,9 @@ io.on('connection', (socket) => {
     socket.on('stop_session', async (data) => {
         try {
             const { sessionId } = data;
-
             if (activeClients.has(String(sessionId))) {
-                const client = activeClients.get(String(sessionId));
-                await destroyClientCompletely(sessionId, client);
-
-                // مسح QR code عند إيقاف الجلسة
-                const clearQRStmt = db.prepare('UPDATE sessions SET qr_code = NULL, qr_timestamp = NULL WHERE id = ?');
-                clearQRStmt.run(sessionId);
-
-                // Update status to disconnected
-                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                statusStmt.run('disconnected', sessionId);
-
+                await destroyClientCompletely(sessionId, activeClients.get(String(sessionId)));
+                db.prepare('UPDATE sessions SET qr_code = NULL, qr_timestamp = NULL, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('disconnected', sessionId);
                 socket.emit('session_stopped', { sessionId });
             }
         } catch (error) {
@@ -2494,225 +2112,49 @@ io.on('connection', (socket) => {
     socket.on('get_session_data', async (data) => {
         try {
             const { sessionId } = data;
+            const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
 
-            // Check if session exists and is connected
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
+            if (!session) return;
 
-            if (!session) {
-                socket.emit('session_error', { error: 'Session not found' });
-                return;
-            }
-
-            // If session is not active but should be connected, restart it
             if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
-                console.log(`Restarting inactive session ${sessionId}`);
-
-                // Create WhatsApp client
                 const client = new Client({
-                    authStrategy: new LocalAuth({
-                        clientId: `session_${sessionId}`,
-                        dataPath: path.join(__dirname, 'sessions')
-                    }),
+                    authStrategy: new LocalAuth({ clientId: `session_${sessionId}`, dataPath: path.join(__dirname, 'sessions') }),
                     puppeteer: getPuppeteerOptions()
                 });
-
                 activeClients.set(String(sessionId), client);
-
-                // Set up event handlers
-                client.on('ready', async () => {
-                    console.log(`Session ${sessionId} restarted successfully!`);
-
-                    // Get contacts and chats
-                    const chats = await client.getChats().catch(err => {
-                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات (authenticated fallback):`, err.message);
-                        return [];
-                    });
-
-                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
-                    let contacts = [];
-                    try {
-                        contacts = await client.getContacts();
-                    } catch (error) {
-                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (authenticated fallback) (${error.message})`);
-                        // استخراج جهات الاتصال من المحادثات
-                        contacts = chats
-                            .filter(chat => !chat.isGroup)
-                            .map(chat => ({
-                                id: chat.id._serialized,
-                                pushname: chat.name || chat.id.user,
-                                number: chat.id.user
-                            }));
+                setupClientEventHandlers(sessionId, client);
+                client.initialize().catch(async () => {
+                    if (activeClients.has(String(sessionId))) {
+                        const failed = activeClients.get(String(sessionId));
+                        activeClients.delete(String(sessionId));
+                        try { await destroyClientCompletely(sessionId, failed); } catch (e) { /* ignore */ }
                     }
-
-                    const sessionData = {
-                        sessionId,
-                        chats: chats.map(chat => ({
-                            id: chat.id._serialized,
-                            name: chat.name || chat.id.user,
-                            type: chat.isGroup ? 'group' : 'private'
-                        })),
-                        contacts: contacts.map(contact => ({
-                            id: contact.id._serialized,
-                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
-                            number: contact.id?.user || contact.number
-                        }))
-                    };
-
-                    // Update database with session data
-                    const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-                    sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
-
-                    socket.emit('session_data', sessionData);
+                    db.prepare('UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run('disconnected', sessionId);
+                    io.emit('session_disconnected', { sessionId, reason: 'INIT_FAILED' });
                 });
-
-                client.on('disconnected', async () => {
-                    console.log(`Restarted session ${sessionId} disconnected`);
-                    await destroyClientCompletely(sessionId, client);
-                });
-
-                client.initialize();
                 return;
             }
 
-            // If session is active, get data normally
             if (activeClients.has(String(sessionId))) {
                 const client = activeClients.get(String(sessionId));
-
-                // التحقق من أن العميل جاهز
-                if (!client.info) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'الجلسة غير جاهزة بعد، يرجى المحاولة لاحقاً',
-                        code: 'SESSION_NOT_READY'
-                    });
+                if (client.info && session.session_data) {
+                    socket.emit('session_data', JSON.parse(session.session_data));
+                } else {
+                    socket.emit('session_error', { error: 'Session initializing', code: 'BUSY' });
                 }
-
-                // Get contacts and chats
-                const chats = await client.getChats();
-                const contacts = await client.getContacts();
-
-                const sessionData = {
-                    sessionId,
-                    chats: chats.map(chat => ({
-                        id: chat.id._serialized,
-                        name: chat.name || chat.id.user,
-                        type: chat.isGroup ? 'group' : 'private'
-                    })),
-                    contacts: contacts.map(contact => ({
-                        id: contact.id._serialized,
-                        name: contact.pushname || contact.id.user,
-                        number: contact.id.user
-                    }))
-                };
-
-                // Update database with session data
-                const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-                sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
-
-                socket.emit('session_data', sessionData);
-            } else {
-                socket.emit('session_error', { error: 'Session not active and cannot be restarted' });
             }
-
-        } catch (error) {
-            console.error('Get session data error:', error);
-            socket.emit('session_error', { error: 'Failed to get session data' });
-        }
+        } catch (error) { }
     });
 
     socket.on('send_message', async (data) => {
         try {
             const { sessionId, contacts, message } = data;
-
-            // Check if session exists and is connected
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
-
-            if (!session) {
-                socket.emit('message_error', { error: 'Session not found' });
-                return;
-            }
-
-            // If session is not active but should be connected, restart it
-            if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
-                console.log(`Restarting inactive session ${sessionId} for message sending`);
-
-                // Create WhatsApp client
-                const client = new Client({
-                    authStrategy: new LocalAuth({
-                        clientId: `session_${sessionId}`,
-                        dataPath: path.join(__dirname, 'sessions')
-                    }),
-                    puppeteer: getPuppeteerOptions()
-                });
-
-                activeClients.set(String(sessionId), client);
-
-                // Wait for client to be ready
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error('Timeout waiting for client')), 30000);
-
-                    client.on('ready', () => {
-                        clearTimeout(timeout);
-                        resolve();
-                    });
-
-                    client.on('disconnected', () => {
-                        clearTimeout(timeout);
-                        reject(new Error('Client disconnected'));
-                    });
-
-                    client.initialize();
-                });
-            }
-
             if (!activeClients.has(String(sessionId))) {
-                socket.emit('message_error', { error: 'Failed to restart session' });
-                return;
-            }
-
-            const client = activeClients.get(String(sessionId));
-            const results = [];
-
-            for (const contactId of contacts) {
-                try {
-                    const chat = await client.getChatById(contactId);
-                    await chat.sendMessage(message);
-                    results.push({ contactId, success: true });
-                } catch (error) {
-                    results.push({ contactId, success: false, error: error.message });
-                }
-            }
-
-            socket.emit('message_sent', { results });
-
-        } catch (error) {
-            console.error('خطأ في إرسال الرسالة:', error);
-            socket.emit('message_error', { error: 'فشل في إرسال الرسالة: ' + error.message });
-        }
-    });
-
-    socket.on('send_bulk_message', async (data) => {
-        try {
-            const { sessionId, contacts, message } = data;
-
-            // Check if session exists and is connected
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
-
-            if (!session) {
-                socket.emit('message_error', { error: 'Session not found' });
-                return;
-            }
-
-            const client = activeClients.get(String(sessionId));
-            if (!client) {
                 socket.emit('message_error', { error: 'Session not active' });
                 return;
             }
 
-            // Send message to all selected contacts
+            const client = activeClients.get(String(sessionId));
             const results = [];
             for (const contactId of contacts) {
                 try {
@@ -2723,114 +2165,59 @@ io.on('connection', (socket) => {
                     results.push({ contactId, success: false, error: error.message });
                 }
             }
-
-            socket.emit('bulk_message_sent', { results });
-
+            socket.emit('message_sent', { results });
         } catch (error) {
-            console.error('خطأ في إرسال الرسائل الجماعية:', error);
-            socket.emit('message_error', { error: 'فشل في إرسال الرسائل الجماعية: ' + error.message });
+            socket.emit('message_error', { error: error.message });
         }
     });
 
-    socket.on('send_file', async (data) => {
+    socket.on('send_bulk_message', async (data) => {
         try {
-            const { sessionId, contacts, fileData, fileName, fileType, caption } = data;
-
-            // Check if session exists and is connected
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
-
-            if (!session) {
-                socket.emit('file_error', { error: 'Session not found' });
-                return;
-            }
-
-            // If session is not active but should be connected, restart it
-            if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
-                console.log(`Restarting inactive session ${sessionId} for file sending`);
-
-                // Create WhatsApp client
-                const client = new Client({
-                    authStrategy: new LocalAuth({
-                        clientId: `session_${sessionId}`,
-                        dataPath: path.join(__dirname, 'sessions')
-                    }),
-                    puppeteer: getPuppeteerOptions()
-                });
-
-                activeClients.set(String(sessionId), client);
-
-                // Wait for client to be ready
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error('Timeout waiting for client')), 30000);
-
-                    client.on('ready', () => {
-                        clearTimeout(timeout);
-                        resolve();
-                    });
-
-                    client.on('disconnected', () => {
-                        clearTimeout(timeout);
-                        reject(new Error('Client disconnected'));
-                    });
-
-                    client.initialize();
-                });
-            }
-
-            if (!activeClients.has(String(sessionId))) {
-                socket.emit('file_error', { error: 'Failed to restart session' });
-                return;
-            }
-
+            const { sessionId, contacts, message } = data;
             const client = activeClients.get(String(sessionId));
+            if (!client) return;
+
             const results = [];
-
-            // Convert base64 to buffer
-            const fileBuffer = Buffer.from(fileData, 'base64');
-
             for (const contactId of contacts) {
                 try {
-                    const chat = await client.getChatById(contactId);
-
-                    // Create media message
-                    const media = new MessageMedia(fileType, fileData, fileName);
-                    await chat.sendMessage(media, { caption: caption || '' });
-
+                    const chatId = contactId.includes('@c.us') ? contactId : `${contactId}@c.us`;
+                    await client.sendMessage(chatId, message);
                     results.push({ contactId, success: true });
                 } catch (error) {
                     results.push({ contactId, success: false, error: error.message });
                 }
             }
+            socket.emit('bulk_message_sent', { results });
+        } catch (error) { }
+    });
 
+    socket.on('send_file', async (data) => {
+        try {
+            const { sessionId, contacts, fileData, fileName, fileType, caption } = data;
+            const client = activeClients.get(String(sessionId));
+            if (!client) return;
+
+            const media = new MessageMedia(fileType, fileData, fileName);
+            const results = [];
+            for (const contactId of contacts) {
+                try {
+                    const chatId = contactId.includes('@c.us') ? contactId : `${contactId}@c.us`;
+                    await client.sendMessage(chatId, media, { caption: caption || '' });
+                    results.push({ contactId, success: true });
+                } catch (error) {
+                    results.push({ contactId, success: false, error: error.message });
+                }
+            }
             socket.emit('file_sent', { results });
-
-        } catch (error) {
-            console.error('خطأ في إرسال الملف:', error);
-            socket.emit('file_error', { error: 'فشل في إرسال الملف: ' + error.message });
-        }
+        } catch (error) { }
     });
 
     socket.on('send_location', async (data) => {
         try {
             const { sessionId, contacts, latitude, longitude, name } = data;
-
-            // Check if session exists and is connected
-            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
-            const session = stmt.get(sessionId);
-
-            if (!session) {
-                socket.emit('message_error', { error: 'Session not found' });
-                return;
-            }
-
             const client = activeClients.get(String(sessionId));
-            if (!client) {
-                socket.emit('message_error', { error: 'Session not active' });
-                return;
-            }
+            if (!client) return;
 
-            // Send location to all selected contacts
             const results = [];
             for (const contactId of contacts) {
                 try {
@@ -2841,13 +2228,8 @@ io.on('connection', (socket) => {
                     results.push({ contactId, success: false, error: error.message });
                 }
             }
-
             socket.emit('location_sent', { results });
-
-        } catch (error) {
-            console.error('خطأ في إرسال الموقع:', error);
-            socket.emit('message_error', { error: 'فشل في إرسال الموقع: ' + error.message });
-        }
+        } catch (error) { }
     });
 
     socket.on('disconnect', () => {
@@ -2920,139 +2302,16 @@ async function cleanupExpiredSessions() {
     }
 }
 
-// تنظيف العمليات المتبقية من Chrome
-async function cleanupOrphanedChromeProcesses() {
-    try {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-
-        console.log('🔍 فحص العمليات المتبقية من Chrome...');
-
-        // الحصول على جميع الجلسات النشطة
-        const activeSessionIds = Array.from(activeClients.keys());
-
-        // تنظيف الجلسات التي لا تحتوي على عميل نشط ولكن حالتها "connected"
-        // فقط إذا كانت الجلسة غير متوقفة وغير منتهية الصلاحية
-        const orphanedSessions = db.prepare(`
-            SELECT id, is_paused, expires_at FROM sessions 
-            WHERE status IN ('connected', 'authenticated', 'loading')
-            AND id NOT IN (${activeSessionIds.length > 0 ? activeSessionIds.map(() => '?').join(',') : '0'})
-            AND is_paused = 0
-        `).all(...activeSessionIds);
-
-        if (orphanedSessions.length > 0) {
-            console.log(`🧹 تم العثور على ${orphanedSessions.length} جلسة متبقية بدون عميل نشط`);
-            for (const session of orphanedSessions) {
-                // التحقق من انتهاء الصلاحية قبل تحديث الحالة
-                let shouldUpdate = true;
-                if (session.expires_at) {
-                    const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
-                    if (row.expired) {
-                        shouldUpdate = false;
-                        console.log(`[${session.id}] الجلسة منتهية الصلاحية، سيتم تحديثها لاحقاً في cleanupExpiredSessions`);
-                    }
-                }
-
-                if (shouldUpdate) {
-                    const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                    statusStmt.run('disconnected', session.id);
-                    console.log(`✅ تم تحديث حالة الجلسة ${session.id} إلى disconnected`);
-                }
-            }
-        }
-
-        // إغلاق عمليات Chrome المتبقية (التي لا تنتمي لجلسات نشطة)
-        if (process.platform === 'win32') {
-            // في Windows: البحث عن عمليات chrome.exe وإغلاقها
-            try {
-                const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq chrome.exe" /FO CSV');
-                const lines = stdout.split('\n').filter(line =>
-                    line.includes('chrome.exe') &&
-                    !line.includes('PID') &&
-                    line.trim()
-                );
-
-                if (lines.length > 0) {
-                    console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
-
-                    // استخراج PIDs
-                    const pids = [];
-                    for (const line of lines) {
-                        const parts = line.split('","');
-                        if (parts.length > 1) {
-                            const pid = parts[1].replace(/"/g, '').trim();
-                            if (pid && !isNaN(pid)) {
-                                pids.push(pid);
-                            }
-                        }
-                    }
-
-                    // إغلاق العمليات المتبقية (فقط إذا لم تكن هناك جلسات نشطة)
-                    if (activeSessionIds.length === 0 && pids.length > 0) {
-                        console.log(`🔧 إغلاق ${pids.length} عملية Chrome متبقية...`);
-                        for (const pid of pids) {
-                            try {
-                                await execAsync(`taskkill /F /T /PID ${pid}`);
-                                console.log(`   ✅ تم إغلاق العملية ${pid}`);
-                            } catch (error) {
-                                // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                // تجاهل الأخطاء في فحص العمليات
-            }
-        } else {
-            // في Linux/Mac: البحث عن عمليات chrome/chromium وإغلاقها
-            try {
-                const { stdout } = await execAsync('ps aux | grep -i chrome | grep -v grep | grep -v "cleanup"');
-                const lines = stdout.split('\n').filter(line => line.trim());
-
-                if (lines.length > 0) {
-                    console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
-
-                    // استخراج PIDs
-                    const pids = [];
-                    for (const line of lines) {
-                        const parts = line.trim().split(/\s+/);
-                        if (parts.length > 1) {
-                            const pid = parts[1];
-                            if (pid && !isNaN(pid)) {
-                                pids.push(pid);
-                            }
-                        }
-                    }
-
-                    // إغلاق العمليات المتبقية (فقط إذا لم تكن هناك جلسات نشطة)
-                    if (activeSessionIds.length === 0 && pids.length > 0) {
-                        console.log(`🔧 إغلاق ${pids.length} عملية Chrome متبقية...`);
-                        for (const pid of pids) {
-                            try {
-                                await execAsync(`kill -9 ${pid}`);
-                                console.log(`   ✅ تم إغلاق العملية ${pid}`);
-                            } catch (error) {
-                                // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                // تجاهل الأخطاء في فحص العمليات
-            }
-        }
-
-    } catch (error) {
-        console.error('خطأ في تنظيف العمليات المتبقية:', error.message);
-    }
-}
-
 const PORT = process.env.PORT || 3000;
 
 // معالجة إغلاق الخادم بشكل نظيف (Graceful Shutdown)
 async function gracefulShutdown(signal) {
     console.log(`\n🏴 تلقي إشارة ${signal}، بدء إغلاق الخادم...`);
+
+    // إيقاف مؤقتات إعادة الاتصال والـ heartbeat حتى لا تُنشئ جلسات جديدة أثناء الإغلاق
+    if (typeof sessionTracker.cleanupAll === 'function') {
+        sessionTracker.cleanupAll();
+    }
 
     // إيقاف استقبال اتصالات جديدة إذا أمكن (server.close)
     if (server) {
@@ -3111,21 +2370,16 @@ server.listen(PORT, async () => {
         console.log(`✅ تم تنظيف ${cleanupResult.cleanedCount} جلسة محذوفة، تم تحرير ${(cleanupResult.cleanedSize / 1024 / 1024).toFixed(2)} MB`);
     }
 
-    // إعادة تشغيل الجلسات المتصلة
-    await restartConnectedSessions();
-
-    // استعادة الجلسات المنفصلة التي لديها بيانات موجودة
-    console.log('🔄 استعادة الجلسات المنفصلة التي لديها بيانات موجودة...');
-    await restoreDisconnectedSessionsWithData();
+    // ── Modern Session Restoration ──
+    await performSessionRestoration();
 
     // تنظيف الجلسات المنتهية كل 24 ساعة
     setInterval(() => {
         cleanupExpiredSessions().catch(err => {
             console.error('خطأ في تنظيف الجلسات المنتهية (دوري):', err);
         });
-    }, 24 * 60 * 60 * 1000); // 24 ساعة
+    }, 24 * 60 * 60 * 1000);
 
-    // تنظيف الجلسات المحذوفة يومياً (كل 24 ساعة)
     setInterval(async () => {
         console.log('🧹 تنظيف دوري للجلسات المحذوفة...');
         const cleanupResult = await cleanupOrphanedSessions();
@@ -3135,7 +2389,7 @@ server.listen(PORT, async () => {
     }, 24 * 60 * 60 * 1000); // 24 ساعة
 
     // مراقبة عمليات Chrome كل 5 دقائق
-    setInterval(monitorChromeProcesses, 5 * 60 * 1000);
+    setInterval(monitorChromeProcesses, 10 * 60 * 1000);
 
     // مراقبة عند بدء الخادم
     setTimeout(monitorChromeProcesses, 10000); // بعد 10 ثوان
@@ -3165,4 +2419,5 @@ server.listen(PORT, async () => {
             console.error('خطأ في تحديث الأيام المتبقية:', error.message);
         }
     }, 6 * 60 * 60 * 1000); // كل 6 ساعات
+
 });
