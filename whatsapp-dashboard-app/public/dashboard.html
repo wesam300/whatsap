@@ -814,11 +814,6 @@
             font-size: 15px;
             font-weight: 500;
         }
-        .qr-container p.qr-refresh-hint {
-            margin-top: 6px;
-            font-size: 12px;
-            color: #8a9ba8;
-        }
 
         .session-details {
             margin-top: 25px;
@@ -1099,8 +1094,6 @@
             color: #666;
         }
     </style>
-    <!-- Improvements CSS -->
-    <link rel="stylesheet" href="css/improvements.css">
 </head>
 <body>
     <nav class="navbar">
@@ -1127,7 +1120,6 @@
         </div>
         <ul class="sidebar-menu">
             <li><a href="/dashboard" class="active"><span class="icon">🏠</span>الرئيسية</a></li>
-            <li><a href="/profile.html"><span class="icon">👤</span>الملف الشخصي</a></li>
             <li><a href="/api-test"><span class="icon">🧪</span>اختبار API</a></li>
             <li><a href="/api-docs"><span class="icon">📚</span>وثائق API</a></li>
             <li><a href="/admin" id="adminSidebarLink" style="display:none;"><span class="icon">⚙️</span>لوحة الأدمن</a></li>
@@ -1178,11 +1170,6 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Improvements JS -->
-    <script src="js/toast.js"></script>
-    <script src="js/dark-mode.js"></script>
-    <script src="js/skeleton.js"></script>
-    <script src="js/utils.js"></script>
     <script src="notification-system.js"></script>
     <script>
         let socket;
@@ -1343,14 +1330,8 @@
         function initializeSocket() {
             socket = io();
             
-            // استقبال QR الجديد (واتساب يحدّثه دورياً لأسباب أمنية) — الحدث الصادر من السيرفر: session_qr
-            socket.on('session_qr', function(data) {
+            socket.on('qr_code', function(data) {
                 updateSessionQR(data.sessionId, data.qrCode);
-            });
-
-            // جاري استعادة الجلسة تلقائياً بعد إعادة تشغيل السيرفر
-            socket.on('session_connecting', function(data) {
-                updateSessionStatus(data.sessionId, 'connecting');
             });
             
             socket.on('session_authenticated', function(data) {
@@ -1366,11 +1347,7 @@
             socket.on('session_auth_failure', function(data) {
                 updateSessionStatus(data.sessionId, 'auth_failure');
                 hideSessionQR(data.sessionId);
-                if (typeof toast !== 'undefined') {
-                    toast.error('فشل في التحقق من الهوية: ' + (data.error || 'خطأ غير معروف'));
-                } else {
-                    notificationSystem.error('فشل في التحقق من الهوية: ' + (data.error || 'خطأ غير معروف'));
-                }
+                notificationSystem.error('فشل في التحقق من الهوية: ' + (data.error || 'خطأ غير معروف'));
             });
             
             socket.on('session_loading', function(data) {
@@ -1388,11 +1365,7 @@
             
             socket.on('session_error', function(data) {
                 console.error('Session error:', data.error);
-                if (typeof toast !== 'undefined') {
-                    toast.error('خطأ في الجلسة: ' + data.error);
-                } else {
-                    notificationSystem.error('خطأ في الجلسة: ' + data.error);
-                }
+                notificationSystem.error('خطأ في الجلسة: ' + data.error);
             });
         }
 
@@ -1471,131 +1444,23 @@
         }
 
         async function loadSessions() {
-            const container = document.getElementById('sessionsContainer');
-            
-            // Show skeleton loading
-            if (typeof SkeletonLoader !== 'undefined') {
-                SkeletonLoader.show(container, 'session', 3);
-            } else {
-                container.innerHTML = '<div class="loading"><div class="spinner"></div><p>جاري تحميل الجلسات...</p></div>';
-            }
-            
             try {
                 const response = await fetch('/api/sessions');
                 if (response.ok) {
                     sessions = await response.json();
                     renderSessions();
                     checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
-                    
-                    // إعادة اتصال تلقائي للجلسات المفصولة التي لديها بيانات
-                    autoReconnectDisconnectedSessions();
                 } else {
                     throw new Error('Failed to load sessions');
                 }
             } catch (error) {
                 console.error('Error loading sessions:', error);
-                if (typeof toast !== 'undefined') {
-                    toast.error('فشل في تحميل الجلسات');
-                }
-                container.innerHTML = `
+                document.getElementById('sessionsContainer').innerHTML = `
                     <div class="empty-state">
                         <h3>خطأ في تحميل الجلسات</h3>
                         <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
-                        <button class="btn btn-primary" onclick="loadSessions()">إعادة المحاولة</button>
                     </div>
                 `;
-            }
-        }
-        
-        // إعادة اتصال تلقائي للجلسات المفصولة التي لديها بيانات
-        async function autoReconnectDisconnectedSessions() {
-            try {
-                // انتظار Socket.IO للاتصال أولاً
-                if (!socket || !socket.connected) {
-                    console.log('[AutoReconnect] Socket.IO غير متصل، انتظار الاتصال...');
-                    await new Promise((resolve) => {
-                        if (socket && socket.connected) {
-                            resolve();
-                        } else {
-                            const checkInterval = setInterval(() => {
-                                if (socket && socket.connected) {
-                                    clearInterval(checkInterval);
-                                    resolve();
-                                }
-                            }, 500);
-                            // Timeout بعد 5 ثوان
-                            setTimeout(() => {
-                                clearInterval(checkInterval);
-                                resolve();
-                            }, 5000);
-                        }
-                    });
-                }
-                
-                // البحث عن الجلسات المفصولة التي لديها بيانات
-                const disconnectedSessions = sessions.filter(session => 
-                    session.status === 'disconnected' && 
-                    !session.is_paused && 
-                    session.expires_at && 
-                    new Date(session.expires_at) > new Date()
-                );
-                
-                if (disconnectedSessions.length === 0) {
-                    return;
-                }
-                
-                console.log(`[AutoReconnect] تم العثور على ${disconnectedSessions.length} جلسة مفصولة، التحقق من إمكانية إعادة الاتصال...`);
-                
-                // التحقق من الحالة الحقيقية لكل جلسة قبل إعادة الاتصال
-                for (const session of disconnectedSessions) {
-                    try {
-                        // التحقق من الحالة الحقيقية للجلسة من السيرفر
-                        const statusResponse = await fetch(`/api/sessions/${session.id}/check-status`);
-                        if (statusResponse.ok) {
-                            const statusData = await statusResponse.json();
-                            
-                            // إذا كانت الجلسة فعلياً متصلة أو في حالة connecting، لا نحتاج لإعادة الاتصال
-                            if (statusData.actualStatus === 'connected' || statusData.actualStatus === 'connecting' || statusData.actualStatus === 'authenticated') {
-                                console.log(`[AutoReconnect] الجلسة ${session.id} متصلة فعلياً (${statusData.actualStatus})، تحديث الحالة...`);
-                                // تحديث الحالة في الواجهة
-                                updateSessionStatus(session.id, statusData.actualStatus);
-                                continue;
-                            }
-                            
-                            // إذا كانت الجلسة منتهية الصلاحية أو متوقفة، تخطي
-                            if (statusData.isExpired || statusData.isPaused) {
-                                console.log(`[AutoReconnect] الجلسة ${session.id} منتهية الصلاحية أو متوقفة، تخطي إعادة الاتصال`);
-                                continue;
-                            }
-                            
-                            // إذا كانت الجلسة لديها بيانات، نحاول إعادة الاتصال
-                            if (statusData.hasSessionData) {
-                                console.log(`[AutoReconnect] إعادة اتصال تلقائي للجلسة ${session.id}...`);
-                                
-                                // إعادة الاتصال
-                                if (socket && socket.connected) {
-                                    socket.emit('start_session', { sessionId: session.id });
-                                    updateSessionStatus(session.id, 'connecting');
-                                    
-                                    if (typeof toast !== 'undefined') {
-                                        toast.info(`جاري إعادة الاتصال بالجلسة "${session.session_name}"...`);
-                                    }
-                                    
-                                    // انتظار قليل بين كل جلسة لتجنب الحمل الزائد
-                                    await new Promise(resolve => setTimeout(resolve, 2000));
-                                } else {
-                                    console.warn(`[AutoReconnect] Socket.IO غير متصل، لا يمكن إعادة الاتصال بالجلسة ${session.id}`);
-                                }
-                            } else {
-                                console.log(`[AutoReconnect] الجلسة ${session.id} لا تحتوي على بيانات، تخطي إعادة الاتصال`);
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`[AutoReconnect] خطأ في التحقق من الجلسة ${session.id}:`, error);
-                    }
-                }
-            } catch (error) {
-                console.error('[AutoReconnect] خطأ في إعادة الاتصال التلقائي:', error);
             }
         }
 
@@ -1607,19 +1472,9 @@
                     const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
                     
                     if (daysRemaining <= 0) {
-                        const msg = `⚠️ الجلسة "${session.session_name}" منتهية الصلاحية!`;
-                        if (typeof toast !== 'undefined') {
-                            toast.warning(msg);
-                        } else {
-                            notificationSystem.warning(msg);
-                        }
+                        notificationSystem.warning(`⚠️ الجلسة "${session.session_name}" منتهية الصلاحية!`);
                     } else if (daysRemaining <= 3) {
-                        const msg = `⚠️ الجلسة "${session.session_name}" ستنتهي خلال ${daysRemaining} أيام`;
-                        if (typeof toast !== 'undefined') {
-                            toast.warning(msg);
-                        } else {
-                            notificationSystem.warning(msg);
-                        }
+                        notificationSystem.warning(`⚠️ الجلسة "${session.session_name}" ستنتهي خلال ${daysRemaining} أيام`);
                     }
                 }
             });
@@ -1629,11 +1484,7 @@
             const sessionName = document.getElementById('sessionName').value.trim();
             
             if (!sessionName) {
-                if (typeof toast !== 'undefined') {
-                    toast.warning('يرجى إدخال اسم للجلسة');
-                } else {
-                    notificationSystem.warning('يرجى إدخال اسم للجلسة');
-                }
+                notificationSystem.warning('يرجى إدخال اسم للجلسة');
                 return;
             }
             
@@ -1656,28 +1507,21 @@
                 
                 if (response.ok && data.success) {
                     document.getElementById('sessionName').value = '';
-                    if (typeof toast !== 'undefined') {
-                        toast.success(data.message || 'تم إنشاء الجلسة بنجاح!');
-                    } else {
-                        notificationSystem.success(data.message || 'تم إنشاء الجلسة بنجاح!');
-                    }
+                    notificationSystem.success(data.message || 'تم إنشاء الجلسة بنجاح!');
                     
                     // Force refresh sessions
                     await loadSessions();
+                    
+                    // Show success message and refresh after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
                 } else {
-                    if (typeof toast !== 'undefined') {
-                        toast.error('خطأ: ' + (data.error || 'فشل في إنشاء الجلسة'));
-                    } else {
-                        notificationSystem.error('خطأ: ' + (data.error || 'فشل في إنشاء الجلسة'));
-                    }
+                    notificationSystem.error('خطأ: ' + (data.error || 'فشل في إنشاء الجلسة'));
                 }
             } catch (error) {
                 console.error('Error creating session:', error);
-                if (typeof toast !== 'undefined') {
-                    toast.error('فشل في إنشاء الجلسة. يرجى المحاولة مرة أخرى.');
-                } else {
-                    notificationSystem.error('فشل في إنشاء الجلسة. يرجى المحاولة مرة أخرى.');
-                }
+                notificationSystem.error('فشل في إنشاء الجلسة. يرجى المحاولة مرة أخرى.');
             } finally {
                 // Re-enable button
                 createBtn.disabled = false;
@@ -1709,17 +1553,7 @@
         function createSessionCard(session) {
             const t = translations[currentLanguage];
             const statusClass = `status-${session.status}`;
-            const statusLabels = {
-                connecting: 'جاري الاتصال...',
-                loading: 'جاري التحميل...',
-                waiting_for_qr: 'انتظار QR',
-                authenticated: 'تم التحقق',
-                connected: 'متصل',
-                disconnected: 'غير متصل',
-                auth_failure: 'فشل التحقق',
-                expired: 'منتهية'
-            };
-            const statusText = statusLabels[session.status] || session.status.replace('_', ' ').toUpperCase();
+            const statusText = session.status.replace('_', ' ').toUpperCase();
             
             // حساب معلومات انتهاء الصلاحية
             const now = new Date();
@@ -1751,8 +1585,7 @@
                 qrSection = `
                     <div class="qr-container">
                         <img src="${session.qr_code}" alt="QR Code">
-                        <p>امسح رمز QR بتطبيق واتساب على جوالك</p>
-                        <p class="qr-refresh-hint">يُحدّث تلقائياً كل دقيقة تقريباً لأسباب أمنية</p>
+                        <p>Scan this QR code with your WhatsApp app</p>
                     </div>
                 `;
             }
@@ -1802,9 +1635,6 @@
             if (socket) {
                 socket.emit('start_session', { sessionId });
                 updateSessionStatus(sessionId, 'waiting_for_qr');
-                if (typeof toast !== 'undefined') {
-                    toast.info('جاري بدء الجلسة...');
-                }
             }
         }
 
@@ -1813,9 +1643,6 @@
                 socket.emit('stop_session', { sessionId });
                 updateSessionStatus(sessionId, 'disconnected');
                 hideSessionQR(sessionId);
-                if (typeof toast !== 'undefined') {
-                    toast.info('جاري إيقاف الجلسة...');
-                }
             }
         }
 
@@ -1828,38 +1655,24 @@
             }
             
             try {
-                if (typeof toast !== 'undefined') {
-                    toast.info('جاري حذف الجلسة...');
-                }
                 const response = await fetch(`/api/sessions/${sessionId}`, {
                     method: 'DELETE'
                 });
                 
                 if (response.ok) {
-                    if (typeof toast !== 'undefined') {
-                        toast.success('تم حذف الجلسة بنجاح');
-                    }
                     await loadSessions();
                 } else {
                     const errorData = await response.json();
-                    if (typeof toast !== 'undefined') {
-                        toast.error('Error: ' + (errorData.error || 'Failed to delete session'));
-                    } else {
-                        alert('Error: ' + (errorData.error || 'Failed to delete session'));
-                    }
+                    alert('Error: ' + (errorData.error || 'Failed to delete session'));
                 }
             } catch (error) {
                 console.error('Error deleting session:', error);
-                if (typeof toast !== 'undefined') {
-                    toast.error('Failed to delete session. Please try again.');
-                } else {
-                    alert('Failed to delete session. Please try again.');
-                }
+                alert('Failed to delete session. Please try again.');
             }
         }
 
         function updateSessionStatus(sessionId, status) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.status = status;
                 renderSessions();
@@ -1867,7 +1680,7 @@
         }
 
         function updateSessionQR(sessionId, qrCode) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.qr_code = qrCode;
                 renderSessions();
@@ -1875,7 +1688,7 @@
         }
 
         function hideSessionQR(sessionId) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.qr_code = null;
                 renderSessions();
@@ -1885,11 +1698,7 @@
         function viewSession(sessionId) {
             // التحقق من أن معرف الجلسة صحيح
             if (!sessionId || isNaN(sessionId)) {
-                if (typeof toast !== 'undefined') {
-                    toast.error('خطأ: معرف الجلسة غير صحيح');
-                } else {
-                    alert('خطأ: معرف الجلسة غير صحيح');
-                }
+                alert('خطأ: معرف الجلسة غير صحيح');
                 return;
             }
             

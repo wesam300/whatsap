@@ -1,0 +1,1 @@
+{"version":"1.145.0","results":[],"errors":[{"code":2,"level":"error","type":"SemgrepError","message":"Invalid scanning root: экус"}],"paths":{"scanned":[]},"engine_requested":"OSS","skipped_rules":[],"profiling_results":[]}

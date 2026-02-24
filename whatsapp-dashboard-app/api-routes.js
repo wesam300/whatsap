@@ -12,7 +12,7 @@ const fetch = require('node-fetch');
 const mime = require('mime');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
-const { destroyClientCompletely, getPuppeteerOptions, cleanupChromeZombies } = require('./session-manager');
+const { destroyClientCompletely, getPuppeteerOptions, cleanupChromeZombies, isClientHealthy } = require('./session-manager');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -48,38 +48,64 @@ router.options('*', (req, res) => {
 
 // متغير لتخزين مرجع activeClients
 let activeClientsRef = null;
-// متغير لتخزين مرجع io
-let ioRef = null;
 
 // دالة لتعيين مرجع activeClients
 function setActiveClientsRef(activeClients) {
     activeClientsRef = activeClients;
 }
 
-// دالة لتعيين مرجع io
-function setIoRef(io) {
-    ioRef = io;
-}
-
 // دالة لإعادة تشغيل الجلسة تلقائياً عند حدوث detached Frame
 async function autoRestartSession(sessionId) {
     try {
-        const sessionIdStr = String(sessionId);
-        console.log(`[autoRestartSession] بدء إعادة تشغيل الجلسة ${sessionIdStr} تلقائياً...`);
-        
+        console.log(`[autoRestartSession] بدء إعادة تشغيل الجلسة ${sessionId} تلقائياً...`);
+
         // 1. إيقاف الجلسة الحالية
-        if (activeClientsRef && activeClientsRef.has(sessionIdStr)) {
-            const currentClient = activeClientsRef.get(sessionIdStr);
+        if (activeClientsRef && activeClientsRef.has(sessionId)) {
+            const currentClient = activeClientsRef.get(sessionId);
             try {
                 await destroyClientCompletely(sessionId, currentClient, null);
             } catch (e) {
                 console.warn(`[autoRestartSession] تحذير في إغلاق الجلسة: ${e.message}`);
             }
-            activeClientsRef.delete(sessionIdStr);
+            activeClientsRef.delete(sessionId);
         }
 
-        // 2. لا قتل لعمليات من خارج المكتبة — الاعتماد على destroyClientCompletely (client.destroy()) فقط
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // 2. تنظيف مجلد الجلسة
+        try {
+            const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+            const lockFile = path.join(sessionPath, 'SingletonLock');
+            const cookieFile = path.join(sessionPath, 'SingletonCookie');
+
+            // قتل عمليات Chrome المرتبطة
+            if (process.platform === 'linux' || process.platform === 'darwin') {
+                try {
+                    const { exec } = require('child_process');
+                    const { promisify } = require('util');
+                    const execAsync = promisify(exec);
+                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`).catch(() => ({ stdout: '' }));
+                    const pids = stdout.trim().split('\n').filter(Boolean);
+                    if (pids.length > 0) {
+                        await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => { });
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                } catch (e) {
+                    // تجاهل الأخطاء
+                }
+            }
+
+            // حذف ملفات القفل
+            try {
+                await fs.unlink(lockFile).catch(() => { });
+                await fs.unlink(cookieFile).catch(() => { });
+            } catch (e) {
+                // تجاهل الأخطاء
+            }
+        } catch (cleanupError) {
+            console.warn(`[autoRestartSession] تحذير في تنظيف المجلد: ${cleanupError.message}`);
+        }
+
+        // 3. انتظار قليل
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 4. إنشاء جلسة جديدة
         const { Client, LocalAuth } = require('whatsapp-web.js');
@@ -91,17 +117,17 @@ async function autoRestartSession(sessionId) {
             puppeteer: getPuppeteerOptions()
         });
 
-        activeClientsRef.set(sessionIdStr, client);
+        activeClientsRef.set(sessionId, client);
 
         // 5. انتظار الجلسة لتكون جاهزة (timeout أقصر - 90 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 try {
-                    client.destroy().catch(() => {});
-                } catch (e) {}
+                    client.destroy().catch(() => { });
+                } catch (e) { }
                 reject(new Error('Timeout waiting for session restart'));
-            }, 120000); // 120 ثانية (زيادة الوقت)
+            }, 90000); // 90 ثانية
 
             const cleanup = () => {
                 clearTimeout(timeout);
@@ -112,29 +138,27 @@ async function autoRestartSession(sessionId) {
 
             client.on('ready', () => {
                 cleanup();
-                console.log(`[autoRestartSession] ✅ تم إعادة تشغيل الجلسة ${sessionIdStr} بنجاح`);
+                console.log(`[autoRestartSession] ✅ تم إعادة تشغيل الجلسة ${sessionId} بنجاح`);
                 resolve();
             });
 
             client.on('disconnected', (reason) => {
                 cleanup();
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 reject(new Error(`Session disconnected during restart: ${reason}`));
             });
 
             client.on('auth_failure', (msg) => {
                 cleanup();
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 reject(new Error(`Authentication failed during restart: ${msg}`));
             });
 
-            try {
-                client.initialize();
-            } catch (initError) {
+            client.initialize().catch((initError) => {
                 cleanup();
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 reject(new Error(`Failed to initialize: ${initError.message}`));
-            }
+            });
         });
 
         return true;
@@ -295,54 +319,17 @@ function validateSessionTokenMiddleware(req, res, next) {
 }
 
 // ========================================
-// دالة مساعدة لإرسال الرسائل مع معالجة خطأ markedUnread
+// دالة إرسال الرسائل مع معالجة الأخطاء
 // ========================================
-/**
- * إرسال رسالة مع معالجة خاصة لخطأ markedUnread
- * @param {Client} client - عميل WhatsApp
- * @param {string} chatId - معرف المحادثة
- * @param {string|MessageMedia} content - محتوى الرسالة
- * @param {object} options - خيارات إضافية
- * @returns {Promise<Message>} - الرسالة المرسلة
- */
 async function sendMessageSafe(client, chatId, content, options = {}, maxRetries = 3, sessionId = null) {
-    const safeOptions = {
-        ...options,
-        sendSeen: false
-    };
+    const safeOptions = { ...options, sendSeen: false };
 
-    // فحص حالة العميل
-    if (!client) {
-        throw new Error('العميل غير متاح');
+    // التحقق الأولي من صحة العميل
+    if (!client || !client.info) {
+        throw new Error('العميل غير متاح أو غير جاهز');
     }
 
-    // فحص أن العميل جاهز
-    if (!client.info) {
-        throw new Error('العميل غير جاهز بعد');
-    }
-    
-    // إذا كانت الحالة authenticated لكن client.info موجود، نحدث الحالة إلى connected
-    // هذا يحل مشكلة الجلسات التي تصل authenticated لكن ready event لا يتم استدعاؤه
-    if (sessionId) {
-        try {
-            const session = db.prepare('SELECT status FROM sessions WHERE id = ?').get(sessionId);
-            if (session && session.status === 'authenticated' && client.info) {
-                console.log(`[${sessionId}] ✅ الجلسة جاهزة فعلياً (client.info موجود) لكن الحالة authenticated، تحديث الحالة إلى connected`);
-                const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
-                statusStmt.run('connected', sessionId);
-                // إرسال إشعار للواجهة
-                if (ioRef) {
-                    ioRef.emit('session_connected', { sessionId });
-                    ioRef.emit('session_ready', { sessionId });
-                }
-            }
-        } catch (statusError) {
-            // تجاهل الأخطاء في تحديث الحالة
-            console.warn(`[sendMessageSafe] تحذير في تحديث حالة الجلسة: ${statusError.message}`);
-        }
-    }
-
-    // إذا لم يتم تمرير sessionId، حاول العثور عليه
+    // البحث عن sessionId إذا لم يتم تمريره
     if (!sessionId && activeClientsRef) {
         for (const [sid, cl] of activeClientsRef.entries()) {
             if (cl === client) {
@@ -352,89 +339,39 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
         }
     }
 
-    // فحص حالة الصفحة بشكل آمن
-    try {
-        if (client.pupPage) {
-            if (client.pupPage.isClosed && client.pupPage.isClosed()) {
-                throw new Error('صفحة المتصفح مغلقة');
+    // التحقق من صحة الجلسة
+    const healthy = await isClientHealthy(client);
+    if (!healthy) {
+        // محاولة إعادة التشغيل التلقائي
+        if (sessionId) {
+            console.log(`[${sessionId}] الجلسة غير صحية، محاولة إعادة التشغيل...`);
+            try {
+                await autoRestartSession(sessionId);
+                const newClient = activeClientsRef.get(sessionId);
+                if (newClient && await isClientHealthy(newClient)) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    return await sendMessageSafe(newClient, chatId, content, options, maxRetries - 1, sessionId);
+                }
+            } catch (e) {
+                console.error(`[${sessionId}] فشل إعادة التشغيل:`, e.message);
             }
         }
-    } catch (e) {
-        // تجاهل أخطاء الفحص إذا كانت الصفحة غير متاحة
-        if (!e.message.includes('صفحة المتصفح مغلقة')) {
-            console.warn('[sendMessageSafe] تحذير في فحص الصفحة:', e.message);
-        }
+        throw new Error('الجلسة غير مستقرة. يرجى إعادة التشغيل من لوحة التحكم.');
     }
 
     let lastError;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // انتظار قصير بين المحاولات (مخفض للسرعة)
             if (attempt > 1) {
-                await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // 1, 1.5, 2 ثانية بدلاً من 2, 4, 6
+                await new Promise(r => setTimeout(r, 1000 * attempt));
             }
 
-            // فحص حالة العميل قبل كل محاولة
-            if (!client || !client.info) {
-                throw new Error('العميل غير جاهز');
-            }
-
-            // فحص حالة الصفحة قبل الاستخدام
-            try {
-                if (client.pupPage) {
-                    if (client.pupPage.isClosed && client.pupPage.isClosed()) {
-                        throw new Error('صفحة المتصفح مغلقة');
-                    }
-                }
-            } catch (pageCheckError) {
-                if (pageCheckError.message.includes('صفحة المتصفح مغلقة')) {
-                    throw pageCheckError;
-                }
-            }
-
-            // محاولة الحصول على Chat مع timeout (مخفض للسرعة)
-            let chat;
-            try {
-                chat = await Promise.race([
-                    client.getChatById(chatId),
-                    new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Timeout getting chat')), 8000) // 8 ثواني بدلاً من 15
-                    )
-                ]);
-            } catch (getChatError) {
-                // إذا كان الخطأ "detached Frame"، يجب إعادة تشغيل الجلسة
-                if (getChatError.message && getChatError.message.includes('detached Frame')) {
-                    // رمي الخطأ ليتم التعامل معه في معالج الخطأ الرئيسي
-                    throw getChatError;
-                }
-                // لا نطبع تحذير لكل محاولة لتقليل الضوضاء
-                if (attempt === 1) {
-                    console.warn(`[sendMessageSafe] تحذير: فشل الحصول على Chat، استخدام client.sendMessage مباشرة`);
-                }
-                chat = null;
-            }
-
-            // فحص حالة الصفحة مرة أخرى قبل الإرسال
-            try {
-                if (client.pupPage && client.pupPage.isClosed && client.pupPage.isClosed()) {
-                    throw new Error('صفحة المتصفح مغلقة قبل الإرسال');
-                }
-            } catch (finalCheckError) {
-                if (finalCheckError.message.includes('صفحة المتصفح مغلقة')) {
-                    throw finalCheckError;
-                }
-            }
-
-            // إرسال الرسالة مع timeout أطول
-            const sendPromise = chat
-                ? chat.sendMessage(content, safeOptions)
-                : client.sendMessage(chatId, content, safeOptions);
-
+            // إرسال مباشر مع timeout
             const result = await Promise.race([
-                sendPromise,
+                client.sendMessage(chatId, content, safeOptions),
                 new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Timeout sending message')), 30000) // 30 ثانية بدلاً من 45
+                    setTimeout(() => reject(new Error('انتهت مهلة الإرسال')), 30000)
                 )
             ]);
 
@@ -442,109 +379,36 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
 
         } catch (error) {
             lastError = error;
+            const msg = error.message || '';
 
-            // معالجة خاصة لـ detached frame - إعادة تشغيل تلقائي
-            if (error.message.includes('detached Frame')) {
-                console.error(`[sendMessageSafe] خطأ detached Frame في المحاولة ${attempt}/${maxRetries}: ${error.message}`);
-                
-                // محاولة إعادة تشغيل الجلسة تلقائياً (فقط في المحاولة الأولى)
+            // أخطاء تتطلب إعادة تشغيل الجلسة
+            if (msg.includes('detached Frame') || msg.includes('Target closed') ||
+                msg.includes('Session closed') || msg.includes('Execution context')) {
+
                 if (attempt === 1 && sessionId) {
                     try {
-                        console.log(`[sendMessageSafe] محاولة إعادة تشغيل الجلسة ${sessionId} تلقائياً...`);
+                        console.log(`[${sessionId}] خطأ ${msg}, محاولة إعادة التشغيل...`);
                         await autoRestartSession(sessionId);
-                        
-                        // الحصول على العميل الجديد
-                        const newClient = activeClientsRef.get(String(sessionId));
-                        if (newClient && newClient.info) {
-                            console.log(`[sendMessageSafe] تم إعادة تشغيل الجلسة، إعادة المحاولة مع العميل الجديد...`);
-                            
-                            // انتظار قليل للتأكد من استقرار الجلسة
-                            await new Promise(resolve => setTimeout(resolve, 3000));
-                            
-                            // تحديث client reference للاستخدام في التكرار التالي
-                            // نحتاج إلى تحديث client في الحلقة - سنستخدم newClient مباشرة
-                            // إعادة المحاولة مع العميل الجديد (بدون زيادة attempt)
-                            attempt = 0; // سيصبح 1 في التكرار التالي
-                            
-                            // تحديث client للاستخدام في التكرار التالي
-                            // الحل: استخدام متغير خارجي أو إعادة تعيين
-                            // سنستخدم حل بسيط: إعادة استدعاء sendMessageSafe مع العميل الجديد
-                            return await sendMessageSafe(newClient, chatId, content, options, maxRetries, sessionId);
-                        } else {
-                            throw new Error('فشل في الحصول على العميل الجديد بعد إعادة التشغيل');
+                        const newClient = activeClientsRef.get(sessionId);
+                        if (newClient && await isClientHealthy(newClient)) {
+                            await new Promise(r => setTimeout(r, 2000));
+                            return await sendMessageSafe(newClient, chatId, content, options, maxRetries - 1, sessionId);
                         }
-                    } catch (restartError) {
-                        console.error(`[sendMessageSafe] فشل في إعادة تشغيل الجلسة تلقائياً: ${restartError.message}`);
-                        // إذا فشلت إعادة التشغيل، أبلغ عن الخطأ
-                        throw new Error('فشل في إعادة تشغيل الجلسة تلقائياً. يرجى إعادة تشغيل الجلسة يدوياً من لوحة التحكم.');
-                    }
-                } else if (attempt === 1 && !sessionId) {
-                    // إذا لم نتمكن من العثور على sessionId، أبلغ عن الخطأ
-                    throw new Error('الجلسة غير مستقرة. يرجى إعادة تشغيل الجلسة من لوحة التحكم.');
-                } else {
-                    // في المحاولات التالية، أبلغ عن الفشل
-                    throw new Error('الجلسة غير مستقرة بعد إعادة التشغيل. يرجى التحقق من حالة الجلسة.');
+                    } catch (e) { }
                 }
+                throw new Error('الجلسة غير مستقرة. يرجى إعادة التشغيل من لوحة التحكم.');
             }
 
-            // معالجة timeout أو أخطاء أخرى - يمكن إعادة المحاولة
-            if (error.message.includes('Timeout') ||
-                error.message.includes('Execution context was destroyed') ||
-                error.message.includes('Target closed') ||
-                error.message.includes('Session closed')) {
-
-                console.warn(`[sendMessageSafe] خطأ في المحاولة ${attempt}/${maxRetries}: ${error.message}`);
-                
-                if (attempt < maxRetries) {
-                    // انتظار أقصر بين المحاولات (للسرعة)
-                    const waitTime = attempt * 1500; // 1.5, 3, 4.5 ثواني بدلاً من 3, 6, 9
-                    if (attempt === 1) {
-                        console.log(`[sendMessageSafe] انتظار ${waitTime}ms قبل المحاولة التالية...`);
-                    }
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                    
-                    // فحص حالة العميل مرة أخرى
-                    if (!client || !client.info) {
-                        throw new Error('العميل غير متاح بعد المحاولة');
-                    }
-                    
-                    // فحص حالة الصفحة مرة أخرى
-                    try {
-                        if (client.pupPage && client.pupPage.isClosed && client.pupPage.isClosed()) {
-                            throw new Error('صفحة المتصفح مغلقة');
-                        }
-                    } catch (pageError) {
-                        if (pageError.message.includes('صفحة المتصفح مغلقة')) {
-                            throw new Error('الجلسة غير مستقرة. يرجى إعادة تشغيل الجلسة من لوحة التحكم.');
-                        }
-                    }
-                    
-                    continue;
-                } else {
-                    // في المحاولة الأخيرة، أبلغ عن الفشل
-                    console.error(`[sendMessageSafe] فشل بعد ${maxRetries} محاولات`);
-                    throw new Error(`فشل إرسال الرسالة بعد ${maxRetries} محاولات: ${error.message}`);
-                }
+            // أخطاء يمكن إعادة المحاولة
+            if (msg.includes('Timeout') || msg.includes('انتهت مهلة')) {
+                if (attempt < maxRetries) continue;
             }
 
-            // معالجة No LID for user
-            if (error.message && error.message.includes('No LID for user')) {
-                try {
-                    const lidChat = await client.getChatById(chatId);
-                    if (lidChat) {
-                        return await lidChat.sendMessage(content, safeOptions);
-                    }
-                } catch (lidError) {
-                    throw new Error(`فشل في إرسال الرسالة: ${error.message}`);
-                }
-            }
-
-            // أخطاء أخرى
             throw error;
         }
     }
 
-    throw new Error(`فشل إرسال الرسالة بعد ${maxRetries} محاولات: ${lastError.message}`);
+    throw new Error(`فشل الإرسال بعد ${maxRetries} محاولات: ${lastError?.message || 'خطأ غير معروف'}`);
 }
 
 // ========================================
@@ -618,11 +482,11 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
         );
 
         console.error('Error sending message:', error);
-        
+
         // تحديد نوع الخطأ وإرجاع رسالة مناسبة
         let errorMessage = 'فشل في إرسال الرسالة';
         let errorCode = 'SEND_MESSAGE_FAILED';
-        
+
         if (error.message.includes('الجلسة غير مستقرة') || error.message.includes('detached Frame')) {
             errorMessage = 'الجلسة غير مستقرة. يرجى إعادة تشغيل الجلسة من لوحة التحكم ثم المحاولة مرة أخرى.';
             errorCode = 'SESSION_UNSTABLE';
@@ -633,7 +497,7 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
             errorMessage = 'انتهت مهلة الانتظار. يرجى المحاولة مرة أخرى.';
             errorCode = 'TIMEOUT';
         }
-        
+
         res.status(500).json({
             success: false,
             error: errorMessage,
@@ -741,11 +605,11 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
         );
 
         console.error('Error sending message:', error);
-        
+
         // تحديد نوع الخطأ وإرجاع رسالة مناسبة
         let errorMessage = 'فشل في إرسال الرسالة';
         let errorCode = 'SEND_MESSAGE_FAILED';
-        
+
         if (error.message.includes('الجلسة غير مستقرة') || error.message.includes('detached Frame')) {
             errorMessage = 'الجلسة غير مستقرة. يرجى إعادة تشغيل الجلسة من لوحة التحكم ثم المحاولة مرة أخرى.';
             errorCode = 'SESSION_UNSTABLE';
@@ -756,7 +620,7 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
             errorMessage = 'انتهت مهلة الانتظار. يرجى المحاولة مرة أخرى.';
             errorCode = 'TIMEOUT';
         }
-        
+
         res.status(500).json({
             success: false,
             error: errorMessage,
@@ -1060,7 +924,7 @@ router.post('/:apiKey/send-group-message', validateApiKeyMiddleware, validateSes
         }
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1122,7 +986,7 @@ router.get('/session-status', validateApiKeyMiddleware, validateSessionTokenMidd
         const { sessionId } = req.sessionTokenInfo;
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1216,7 +1080,7 @@ router.get('/:apiKey/session-status', validateApiKeyMiddleware, validateSessionT
         const { sessionId } = req.sessionTokenInfo;
 
         // التحقق من وجود الجلسة
-        const client = activeClientsRef ? activeClientsRef.get(String(sessionId)) : null;
+        const client = activeClientsRef ? activeClientsRef.get(sessionId) : null;
         if (!client) {
             return res.status(404).json({
                 success: false,
@@ -1757,13 +1621,11 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
             });
         }
 
-        const sessionIdStr = String(sessionId);
-        
         // إيقاف الجلسة الحالية إذا كانت موجودة
-        if (activeClientsRef && activeClientsRef.has(sessionIdStr)) {
-            const currentClient = activeClientsRef.get(sessionIdStr);
+        if (activeClientsRef && activeClientsRef.has(sessionId)) {
+            const currentClient = activeClientsRef.get(sessionId);
             await destroyClientCompletely(sessionId, currentClient, null);
-            activeClientsRef.delete(sessionIdStr);
+            activeClientsRef.delete(sessionId);
         }
 
         // إنشاء جلسة جديدة
@@ -1778,14 +1640,14 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
             puppeteer: getPuppeteerOptions()
         });
 
-        activeClientsRef.set(sessionIdStr, client);
+        activeClientsRef.set(sessionId, client);
 
         // انتظار الجلسة لتكون جاهزة (زيادة timeout إلى 120 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 try {
-                    client.destroy().catch(() => {});
+                    client.destroy().catch(() => { });
                 } catch (e) {
                     // تجاهل أخطاء الإغلاق
                 }
@@ -1806,9 +1668,9 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 
             client.on('disconnected', (reason) => {
                 cleanup();
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 try {
-                    client.destroy().catch(() => {});
+                    client.destroy().catch(() => { });
                 } catch (e) {
                     // تجاهل أخطاء الإغلاق
                 }
@@ -1817,17 +1679,15 @@ router.post('/:apiKey/restart-session', validateApiKeyMiddleware, validateSessio
 
             client.on('auth_failure', (msg) => {
                 cleanup();
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 reject(new Error(`Authentication failed: ${msg}`));
             });
 
-            try {
-                client.initialize();
-            } catch (initError) {
+            client.initialize().catch((initError) => {
                 clearTimeout(timeout);
-                activeClientsRef.delete(sessionIdStr);
+                activeClientsRef.delete(sessionId);
                 reject(new Error(`Failed to initialize client: ${initError.message}`));
-            }
+            });
         });
 
         res.json({
@@ -2278,4 +2138,4 @@ router.use((error, req, res, next) => {
     next(error);
 });
 
-module.exports = { router, setActiveClientsRef, setIoRef };
+module.exports = { router, setActiveClientsRef };

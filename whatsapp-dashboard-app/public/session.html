@@ -650,15 +650,6 @@
             margin-bottom: 20px;
         }
 
-        .empty-state.qr-state .qr-wrapper {
-            margin: 20px 0;
-        }
-        .empty-state.qr-state .qr-hint {
-            font-size: 13px;
-            color: #888;
-            margin-top: 10px;
-        }
-
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -845,23 +836,6 @@
                 }
             });
             
-            socket.on('session_error', function(data) {
-                if (data.error) {
-                    console.error('Session error:', data.error);
-                    if (data.code === 'SESSION_NOT_READY') {
-                        // الجلسة غير جاهزة بعد، إعادة المحاولة بعد قليل
-                        console.log('Session not ready, retrying in 5 seconds...');
-                        setTimeout(() => {
-                            if (socket && socket.connected) {
-                                socket.emit('get_session_data', { sessionId });
-                            }
-                        }, 5000);
-                    } else {
-                        showError('خطأ في الجلسة: ' + data.error);
-                    }
-                }
-            });
-            
             socket.on('session_authenticated', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('authenticated');
@@ -871,7 +845,6 @@
             socket.on('session_ready', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('connected');
-                    loadSessionData();
                 }
             });
             
@@ -885,19 +858,6 @@
             socket.on('session_loading', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('loading');
-                }
-            });
-
-            // تحديث رمز QR تلقائياً (واتساب يحدّثه دورياً — لا حاجة لإيقاف/تشغيل الجلسة)
-            socket.on('session_qr', function(data) {
-                if (data.sessionId == sessionId && data.qrCode) {
-                    const img = document.getElementById('sessionQRImage');
-                    if (img) {
-                        img.src = data.qrCode;
-                        img.style.display = '';
-                    }
-                    const placeholder = document.getElementById('sessionQRPlaceholder');
-                    if (placeholder) placeholder.style.display = 'none';
                 }
             });
             
@@ -1043,59 +1003,26 @@
                         document.getElementById('sessionName').textContent = session.session_name;
                         updateSessionStatus(session.status);
                         
-                        if (session.status === 'connected' || session.status === 'authenticated') {
+                        if (session.status === 'connected') {
                             // Check if we already have session data
                             if (session.session_data) {
                                 try {
-                                    const parsedData = JSON.parse(session.session_data);
-                                    // التحقق من أن البيانات صحيحة وليست فارغة
-                                    if (parsedData && (parsedData.chats || parsedData.contacts)) {
-                                        sessionData = parsedData;
-                                        renderMainContent();
-                                    } else {
-                                        // البيانات فارغة، طلب بيانات جديدة
-                                        console.log('Session data is empty, requesting new data...');
-                                        if (socket && socket.connected) {
-                                            socket.emit('get_session_data', { sessionId });
-                                        } else {
-                                            // انتظار Socket.IO للاتصال
-                                            socket.once('connect', () => {
-                                                socket.emit('get_session_data', { sessionId });
-                                            });
-                                        }
-                                    }
+                                    sessionData = JSON.parse(session.session_data);
+                                    renderMainContent();
                                 } catch (e) {
-                                    console.error('Error parsing session data:', e);
                                     // If no session data, request it
-                                    if (socket && socket.connected) {
-                                        socket.emit('get_session_data', { sessionId });
-                                    } else {
-                                        socket.once('connect', () => {
-                                            socket.emit('get_session_data', { sessionId });
-                                        });
-                                    }
+                                    socket.emit('get_session_data', { sessionId });
                                 }
                             } else {
                                 // Request session data from server
-                                if (socket && socket.connected) {
-                                    socket.emit('get_session_data', { sessionId });
-                                } else {
-                                    socket.once('connect', () => {
-                                        socket.emit('get_session_data', { sessionId });
-                                    });
-                                }
+                                socket.emit('get_session_data', { sessionId });
                             }
                         } else if (session.status === 'waiting_for_qr') {
-                            // عدم عرض QR قديم من قاعدة البيانات — نعرض النص حتى يصل رمز جديد عبر session_qr
                             document.getElementById('mainContent').innerHTML = `
-                                <div class="empty-state qr-state">
-                                    <h3>امسح رمز QR بتطبيق واتساب</h3>
-                                    <div class="qr-wrapper">
-                                        <img id="sessionQRImage" src="" alt="QR Code" style="max-width:260px; border-radius:12px; display:none;">
-                                        <p id="sessionQRPlaceholder">جاري تحميل رمز QR...</p>
-                                    </div>
-                                    <p class="qr-hint">يُحدّث تلقائياً كل دقيقة تقريباً — لا حاجة لإيقاف أو تشغيل الجلسة</p>
-                                    <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">العودة للوحة التحكم</button>
+                                <div class="empty-state">
+                                    <h3>Waiting for QR Code</h3>
+                                    <p>This session is waiting for you to scan the QR code. Please go back to the dashboard and scan the QR code first.</p>
+                                    <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
                                 </div>
                             `;
                         } else if (session.status === 'disconnected') {
