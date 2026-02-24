@@ -1174,6 +1174,7 @@
     <script>
         let socket;
         let sessions = [];
+        let qrPollingInterval = null;
         let currentLanguage = 'ar'; // اللغة الافتراضية
 
         // دالة لعرض التاريخ الميلادي بشكل صريح
@@ -1331,7 +1332,9 @@
             socket = io();
             
             socket.on('qr_code', function(data) {
-                updateSessionQR(data.sessionId, data.qrCode);
+                if (data && data.sessionId != null && data.qrCode) {
+                    updateSessionQR(data.sessionId, data.qrCode);
+                }
             });
             
             socket.on('session_authenticated', function(data) {
@@ -1450,6 +1453,17 @@
                     sessions = await response.json();
                     renderSessions();
                     checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
+                    // استطلاع دوري عند انتظار QR حتى يظهر الرمز من قاعدة البيانات إذا فات حدث Socket
+                    if (sessions.some(s => s.status === 'waiting_for_qr')) {
+                        if (!qrPollingInterval) {
+                            qrPollingInterval = setInterval(loadSessions, 3000);
+                        }
+                    } else {
+                        if (qrPollingInterval) {
+                            clearInterval(qrPollingInterval);
+                            qrPollingInterval = null;
+                        }
+                    }
                 } else {
                     throw new Error('Failed to load sessions');
                 }
@@ -1672,7 +1686,7 @@
         }
 
         function updateSessionStatus(sessionId, status) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.status = status;
                 renderSessions();
@@ -1680,15 +1694,16 @@
         }
 
         function updateSessionQR(sessionId, qrCode) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.qr_code = qrCode;
+                session.status = 'waiting_for_qr';
                 renderSessions();
             }
         }
 
         function hideSessionQR(sessionId) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.qr_code = null;
                 renderSessions();

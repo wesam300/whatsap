@@ -49,11 +49,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Trust proxy (لإصلاح مشكلة express-rate-limit) - استخدام إعداد محدود بدلاً من true
-// إذا كان السيرفر خلف proxy (مثل nginx)، استخدم: app.set('trust proxy', 1)
-// إذا لم يكن خلف proxy، استخدم: app.set('trust proxy', false)
-// هنا نستخدم false لتجنب مشاكل الأمان مع rate limiting
-app.set('trust proxy', false);
+// Trust proxy (لإصلاح مشكلة express-rate-limit و X-Forwarded-For عند وجود nginx أو proxy)
+// عند تشغيل السيرفر خلف proxy (مثل nginx) يجب تفعيله لتجنب ValidationError: ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
 
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
@@ -121,8 +119,8 @@ app.use(express.json({
         if (buf && buf.length) {
             try {
                 let str = buf.toString('utf8');
-                // إزالة أحرف التحكم غير الصالحة (ما عدا \t \n \r)
-                str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+                // إزالة/استبدال كل أحرف التحكم في JSON لتجنب "Bad control character in string literal"
+                str = str.replace(/[\x00-\x1F\x7F]/g, ' ');
                 req.rawBody = str;
             } catch (e) { }
         }

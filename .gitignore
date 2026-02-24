@@ -78,13 +78,3 @@ typings/
 # IDE's
 .idea
 .vscode
-
-# WhatsApp dashboard local data
-whatsapp-dashboard-app/sessions/
-whatsapp-dashboard-app/sessions/**
-whatsapp-dashboard-app/sessions/*.db
-whatsapp-dashboard-app/sessions/**/*.db
-whatsapp-dashboard-app/sessions/**/IndexedDB/**
-whatsapp-dashboard-app/sessions/**/Cache/**
-whatsapp-dashboard-app/sessions/**/Code Cache/**
-whatsapp-dashboard-app/sessions/**/Service Worker/**
