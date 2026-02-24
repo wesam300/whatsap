@@ -111,7 +111,41 @@ app.use((req, res, next) => {
 
 const JSON_LIMIT = '10mb';
 const jsonParser = express.json({ limit: JSON_LIMIT, strict: false });
+
+// مسارات /api: قراءة الجسم وتنظيف أحرف التحكم ثم التحليل (لتجنب Bad control character على السيرفر)
+function sanitizeJsonString(s) {
+    return (s || '').replace(/[\x00-\x1F\x7F]/g, ' ');
+}
+app.use('/api', (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    const chunks = [];
+    let len = 0;
+    const limit = 10 * 1024 * 1024;
+    req.on('data', (chunk) => {
+        len += chunk.length;
+        if (len > limit) { req.destroy(); return; }
+        chunks.push(chunk);
+    });
+    req.on('end', () => {
+        try {
+            const buf = Buffer.concat(chunks);
+            const raw = buf.length ? buf.toString('utf8') : '';
+            if (!raw.trim()) { req.body = {}; return next(); }
+            const str = sanitizeJsonString(raw);
+            req.body = JSON.parse(str || '{}');
+            next();
+        } catch (e) {
+            if (e.message && e.message.includes('control character')) {
+                return res.status(400).json({ success: false, error: 'خطأ في تنسيق JSON', details: 'محتوى الطلب يحتوي على أحرف تحكم غير مسموحة. استخدم \\n للأسطر الجديدة.' });
+            }
+            next();
+        }
+    });
+    req.on('error', () => res.status(400).end());
+});
+
 app.use((req, res, next) => {
+    if (req.url.startsWith('/api') && req.body !== undefined) return next();
     const ct = req.headers['content-type'] || '';
     if (!ct.includes('application/json')) {
         return jsonParser(req, res, (err) => {
