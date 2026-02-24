@@ -79,5 +79,6 @@ pm2 logs whatsapp-dashboard --lines 50
 | browser is already running | cleanupSessionFolder + killChromeProcessesForSession قبل كل بدء جلسة؛ قفل sessionStartLocks |
 | انتهت مهلة الإرسال | رفع المهلة إلى 45 ثانية في api-routes |
 | autoRestartSession فشل | استخدام killChromeProcessesForSession وحذف ملفات القفل و authTimeoutMs في api-routes |
+| SESSION_NOT_FOUND والجلسة ظاهرة authenticated | عند بدء التشغيل نستعيد أيضاً الجلسات ذات الحالة `authenticated` (لم تصل بعد لـ ready) حتى تصبح متصلة ويمكن الإرسال منها |
 
-بعد النشر الصحيح يجب أن تختفي أو تقل هذه الأخطاء بشكل كبير.
+بعد النشر: `git pull` ثم إعادة تشغيل PM2 (ويفضل قتل عمليات Chrome العالقة قبلها كما في القسم 3).

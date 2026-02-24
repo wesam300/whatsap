@@ -576,8 +576,8 @@ async function restartConnectedSessions() {
 async function restoreDisconnectedSessionsWithData() {
     try {
         console.log('🔍 البحث عن جلسات منفصلة لديها بيانات موجودة...');
-        const disconnectedSessionsStmt = db.prepare('SELECT * FROM sessions WHERE status = ? OR status = ?');
-        const disconnectedSessions = disconnectedSessionsStmt.all('disconnected', 'connecting');
+        const disconnectedSessionsStmt = db.prepare('SELECT * FROM sessions WHERE status IN (?, ?, ?)');
+        const disconnectedSessions = disconnectedSessionsStmt.all('disconnected', 'connecting', 'authenticated');
 
         let restoredCount = 0;
 
