@@ -66,7 +66,7 @@ const generalLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الطلبات، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress,
+
 });
 
 const apiLimiter = rateLimit({
@@ -75,7 +75,7 @@ const apiLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من طلبات API، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress,
+
 });
 
 const messageLimiter = rateLimit({
@@ -84,7 +84,7 @@ const messageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress,
+
 });
 
 const dailyMessageLimiter = rateLimit({
@@ -93,7 +93,7 @@ const dailyMessageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية، يرجى المحاولة غداً' },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress,
+
 });
 
 
