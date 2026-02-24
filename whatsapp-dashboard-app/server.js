@@ -511,8 +511,8 @@ async function monitorChromeProcesses() {
 
         if (chromeCount > expectedMax) {
             console.warn(`⚠️ عدد عمليات Chrome (${chromeCount}) أكبر من المتوقع (${expectedMax})`);
-            console.warn(`💡 يتم الان تنظيف العمليات الزائدة...`);
-            await cleanupChromeZombies();
+            console.warn(`💡 يتم الان تنظيف العمليات الزائدة (جلسات غير نشطة فقط)...`);
+            await cleanupChromeZombies(sessionsDir, activeClients);
         }
 
     } catch (error) {
@@ -2079,10 +2079,13 @@ io.on('connection', (socket) => {
             await new Promise(resolve => setTimeout(resolve, 2500));
 
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+            // مسح QR القديم دائماً عند البدء حتى لا يظهر رمز منتهي للمستخدم
+            db.prepare('UPDATE sessions SET qr_code = NULL WHERE id = ?').run(sessionId);
+
             if (forceNewQR || session.status === 'auth_failure') {
                 try {
                     await fs.rm(sessionPath, { recursive: true, force: true }).catch(() => { });
-                    db.prepare('UPDATE sessions SET qr_code = NULL, status = ? WHERE id = ?').run('waiting_for_qr', sessionId);
+                    db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('waiting_for_qr', sessionId);
                 } catch (e) { }
             }
 
@@ -2371,8 +2374,8 @@ server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
 
-    // تنظيف عمليات Chrome المعلقة عند بدء التشغيل
-    await cleanupChromeZombies();
+    // تنظيف عمليات Chrome المعلقة عند بدء التشغيل (قبل الاستعادة، activeClients فارغ فتُنظَّف كل المجلدات)
+    await cleanupChromeZombies(sessionsDir, activeClients);
 
     // تنظيف الجلسات المنتهية الصلاحية
     cleanupExpiredSessions().catch(err => {

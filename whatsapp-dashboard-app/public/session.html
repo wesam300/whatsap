@@ -1086,13 +1086,13 @@
                                 }
                             }
                         } else if (session.status === 'waiting_for_qr') {
-                            const qrSrc = session.qr_code || '';
+                            // عدم عرض QR قديم من قاعدة البيانات — نعرض النص حتى يصل رمز جديد عبر session_qr
                             document.getElementById('mainContent').innerHTML = `
                                 <div class="empty-state qr-state">
                                     <h3>امسح رمز QR بتطبيق واتساب</h3>
                                     <div class="qr-wrapper">
-                                        <img id="sessionQRImage" src="${qrSrc}" alt="QR Code" style="max-width:260px; border-radius:12px; ${qrSrc ? '' : 'display:none;'}">
-                                        <p id="sessionQRPlaceholder" style="${qrSrc ? 'display:none' : ''}">جاري تحميل رمز QR...</p>
+                                        <img id="sessionQRImage" src="" alt="QR Code" style="max-width:260px; border-radius:12px; display:none;">
+                                        <p id="sessionQRPlaceholder">جاري تحميل رمز QR...</p>
                                     </div>
                                     <p class="qr-hint">يُحدّث تلقائياً كل دقيقة تقريباً — لا حاجة لإيقاف أو تشغيل الجلسة</p>
                                     <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">العودة للوحة التحكم</button>

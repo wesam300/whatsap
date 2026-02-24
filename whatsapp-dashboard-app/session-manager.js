@@ -319,56 +319,46 @@ async function destroyClientCompletely(sessionId, client, reconnectionTimers = n
 
 // ========================================
 // Chrome Zombie Cleanup
+// تنظيف عمليات Chrome المعلقة فقط للجلسات التي ليست في activeClients
+// حتى لا نقتل متصفحات الجلسات النشطة أو أثناء التهيئة
 // ========================================
 
-async function cleanupChromeZombies() {
-    const { exec } = require('child_process');
-    const util = require('util');
-    const execAsync = util.promisify(exec);
+async function cleanupChromeZombies(sessionsDir, activeClients) {
     const platform = process.platform;
+    const activeSet = activeClients && typeof activeClients.has === 'function'
+        ? new Set([...activeClients.keys()].map(k => String(k)))
+        : new Set();
 
-    console.log('🧹 Cleaning up zombie Chrome processes...');
+    console.log('🧹 Cleaning up zombie Chrome processes (inactive sessions only)...');
 
     try {
-        if (platform === 'linux' || platform === 'darwin') {
-            try {
-                const { stdout } = await execAsync('pgrep -f "chrome.*session-session_"');
-                const pids = stdout.trim().split('\n').filter(Boolean);
-
-                if (pids.length > 0) {
-                    console.log(`🔫 Found ${pids.length} zombie processes: ${pids.join(', ')}`);
-                    for (const pid of pids) {
-                        try {
-                            await execAsync(`kill -15 ${pid}`).catch(() => { });
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                            await execAsync(`kill -9 ${pid}`).catch(() => { });
-                        } catch (e) { /* ignore */ }
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    console.log('✅ Zombie processes cleaned');
-                    return pids.length;
-                } else {
-                    console.log('✨ No zombie processes found');
-                }
-            } catch (e) {
-                if (e.code === 1) {
-                    console.log('✨ No zombie processes found');
-                } else {
-                    throw e;
-                }
-            }
-        } else if (platform === 'win32') {
-            try {
-                await execAsync('wmic process where "name=\'chrome.exe\' and commandline like \'%session-session_%\'" call terminate');
-                console.log('✅ Windows cleanup attempted');
-            } catch (e) {
-                console.log('ℹ️ Windows cleanup done (no matching processes)');
-            }
+        if (!sessionsDir || !require('fs').existsSync(sessionsDir)) {
+            console.log('ℹ️ No sessions directory, skip zombie cleanup');
+            return 0;
         }
+
+        const entries = require('fs').readdirSync(sessionsDir, { withFileTypes: true });
+        let cleaned = 0;
+        for (const entry of entries) {
+            if (!entry.isDirectory() || !entry.name.startsWith('session-session_')) continue;
+            const m = entry.name.match(/^session-session_(\d+)$/);
+            if (!m) continue;
+            const sessionId = m[1];
+            if (activeSet.has(sessionId)) continue; // لا نلمس الجلسات النشطة
+            await cleanSessionLocks(sessionId, sessionsDir);
+            cleaned++;
+        }
+        if (cleaned > 0) {
+            console.log(`✅ Cleaned locks for ${cleaned} inactive session(s)`);
+            await new Promise(r => setTimeout(r, 1500));
+        } else {
+            console.log('✨ No inactive session processes to clean');
+        }
+        return cleaned;
     } catch (error) {
         console.error('⚠️ Error cleaning zombie processes:', error.message);
+        return 0;
     }
-    return 0;
 }
 
 // ========================================
@@ -727,10 +717,14 @@ async function cleanSessionLocks(sessionId, sessionsDir) {
         const execAsync = promisify(exec);
 
         if (process.platform === 'linux' || process.platform === 'darwin') {
-            // جولة أولى: قتل العمليات ثم انتظار حتى تخرج العمليات الفرعية
+            // fuser -k يقتل كل العمليات التي تستخدم مجلد الجلسة (أوثق من pgrep)
+            try {
+                await execAsync(`fuser -k "${sessionPath}" 2>/dev/null`).catch(() => {});
+                await new Promise(resolve => setTimeout(resolve, 1800));
+            } catch (e) { /* fuser غير متوفر أو فشل */ }
+            // جولة pgrep أيضاً للتأكد
             await killProcessesForSession(sessionId, execAsync);
             await new Promise(resolve => setTimeout(resolve, 2200));
-            // جولة ثانية: قتل أي عملية متبقية (مثلاً عمليات فرعية ظهرت بعد موت الأب)
             const killed = await killProcessesForSession(sessionId, execAsync);
             if (killed > 0) {
                 await new Promise(resolve => setTimeout(resolve, 1500));
@@ -822,8 +816,9 @@ async function restoreSessions({ db, activeClients, io, Client, LocalAuth, setup
 
                 console.log(`[${session.id}] 🔄 Restoring session "${session.session_name}"...`);
 
-                // Clean locks first
+                // Clean locks first then انتظار قبل فتح المتصفح
                 await cleanSessionLocks(session.id, sessionsDir);
+                await new Promise(resolve => setTimeout(resolve, 3500));
 
                 // Update status to connecting
                 db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('connecting', session.id);
