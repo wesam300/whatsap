@@ -452,8 +452,8 @@ function setupClientEventHandlers(sessionId, client) {
             const qrStmt = db.prepare('UPDATE sessions SET qr_code = ?, qr_timestamp = ? WHERE id = ?');
             qrStmt.run(qrCodeDataURL, qrTimestamp, sessionId);
             
-            // إرسال QR Code للواجهة
-            io.emit('session_qr', { 
+            // إرسال QR Code للواجهة (نفس اسم الحدث الذي يستمع له الداشبورد)
+            io.emit('qr_code', { 
                 sessionId: sessionId,
                 qrCode: qrCodeDataURL,
                 timestamp: qrTimestamp
@@ -516,8 +516,8 @@ async function restartConnectedSessions() {
                         const qrStmt = db.prepare('UPDATE sessions SET qr_code = ? WHERE id = ?');
                         qrStmt.run(qrCodeDataURL, session.id);
                         
-                        // إرسال QR Code للواجهة
-                        io.emit('session_qr', { 
+                        // إرسال QR Code للواجهة (نفس اسم الحدث الذي يستمع له الداشبورد)
+                        io.emit('qr_code', { 
                             sessionId: session.id, 
                             sessionName: session.session_name,
                             qrCode: qrCodeDataURL 
