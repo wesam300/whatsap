@@ -2475,64 +2475,10 @@ io.on('connection', (socket) => {
                 }
             });
 
-            // Add a fallback: if authenticated event is fired, also emit session_ready
-            client.on('authenticated', async () => {
+            // عند 'authenticated' نحدّث الواجهة فقط — لا نستدعي getChats هنا لأن الـ Store قد لا يكون جاهزاً بعد (يسبب خطأ getChatModel .update)
+            // جلب المحادثات والجهات يتم فقط عند حدث 'ready'
+            client.on('authenticated', () => {
                 socket.emit('session_ready', { sessionId });
-
-                // Also try to get session data as fallback
-                try {
-                    // انتظار حتى يكون العميل جاهزاً تماماً
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // التحقق من أن العميل جاهز
-                    if (!client.info) {
-                        console.log(`Session ${sessionId} not ready yet, skipping data fetch`);
-                        return;
-                    }
-
-                    const chats = await client.getChats().catch(err => {
-                        console.error(`[${sessionId}] خطأ في الحصول على المحادثات (authenticated fallback):`, err.message);
-                        return [];
-                    });
-
-                    // محاولة الحصول على جهات الاتصال مع معالجة الأخطاء
-                    let contacts = [];
-                    try {
-                        contacts = await client.getContacts();
-                    } catch (error) {
-                        console.warn(`[${sessionId}] تحذير: فشل في الحصول على جهات الاتصال (authenticated fallback) (${error.message})`);
-                        // استخراج جهات الاتصال من المحادثات
-                        contacts = chats
-                            .filter(chat => !chat.isGroup)
-                            .map(chat => ({
-                                id: chat.id._serialized,
-                                pushname: chat.name || chat.id.user,
-                                number: chat.id.user
-                            }));
-                    }
-
-                    const sessionData = {
-                        sessionId,
-                        chats: chats.map(chat => ({
-                            id: chat.id._serialized,
-                            name: chat.name || chat.id.user,
-                            type: chat.isGroup ? 'group' : 'private'
-                        })),
-                        contacts: contacts.map(contact => ({
-                            id: contact.id._serialized,
-                            name: contact.pushname || contact.name || contact.id?.user || contact.number,
-                            number: contact.id?.user || contact.number
-                        }))
-                    };
-
-                    // Save session data to database
-                    const sessionDataStmt = db.prepare('UPDATE sessions SET session_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-                    sessionDataStmt.run(JSON.stringify(sessionData), sessionId);
-
-                    socket.emit('session_data', sessionData);
-                } catch (error) {
-                    console.error('Error getting session data in authenticated fallback:', error);
-                }
             });
 
             client.on('disconnected', async (reason) => {

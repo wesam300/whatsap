@@ -12,7 +12,7 @@ const fetch = require('node-fetch');
 const mime = require('mime');
 const { validateApiKey, validateSessionToken, logApiRequest } = require('./api-key-manager');
 const db = require('./db');
-const { destroyClientCompletely, getPuppeteerOptions, cleanupChromeZombies, isClientHealthy } = require('./session-manager');
+const { destroyClientCompletely, getPuppeteerOptions, cleanupChromeZombies, isClientHealthy, killChromeProcessesForSession } = require('./session-manager');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -59,52 +59,32 @@ async function autoRestartSession(sessionId) {
     try {
         console.log(`[autoRestartSession] بدء إعادة تشغيل الجلسة ${sessionId} تلقائياً...`);
 
+        const sid = String(sessionId);
+
         // 1. إيقاف الجلسة الحالية
-        if (activeClientsRef && activeClientsRef.has(sessionId)) {
-            const currentClient = activeClientsRef.get(sessionId);
+        if (activeClientsRef && activeClientsRef.has(sid)) {
+            const currentClient = activeClientsRef.get(sid);
             try {
                 await destroyClientCompletely(sessionId, currentClient, null);
             } catch (e) {
                 console.warn(`[autoRestartSession] تحذير في إغلاق الجلسة: ${e.message}`);
             }
-            activeClientsRef.delete(sessionId);
+            activeClientsRef.delete(sid);
         }
 
-        // 2. تنظيف مجلد الجلسة
+        // 2. قتل أي عمليات Chrome قديمة للجلسة (تجنب "browser is already running")
+        await killChromeProcessesForSession(sessionId);
+        await new Promise(resolve => setTimeout(resolve, 2200));
+
+        // 3. حذف ملفات القفل
         try {
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
             const lockFile = path.join(sessionPath, 'SingletonLock');
             const cookieFile = path.join(sessionPath, 'SingletonCookie');
+            await fs.unlink(lockFile).catch(() => { });
+            await fs.unlink(cookieFile).catch(() => { });
+        } catch (e) { /* ignore */ }
 
-            // قتل عمليات Chrome المرتبطة
-            if (process.platform === 'linux' || process.platform === 'darwin') {
-                try {
-                    const { exec } = require('child_process');
-                    const { promisify } = require('util');
-                    const execAsync = promisify(exec);
-                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`).catch(() => ({ stdout: '' }));
-                    const pids = stdout.trim().split('\n').filter(Boolean);
-                    if (pids.length > 0) {
-                        await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => { });
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                } catch (e) {
-                    // تجاهل الأخطاء
-                }
-            }
-
-            // حذف ملفات القفل
-            try {
-                await fs.unlink(lockFile).catch(() => { });
-                await fs.unlink(cookieFile).catch(() => { });
-            } catch (e) {
-                // تجاهل الأخطاء
-            }
-        } catch (cleanupError) {
-            console.warn(`[autoRestartSession] تحذير في تنظيف المجلد: ${cleanupError.message}`);
-        }
-
-        // 3. انتظار قليل
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 4. إنشاء جلسة جديدة
@@ -114,15 +94,16 @@ async function autoRestartSession(sessionId) {
                 clientId: `session_${sessionId}`,
                 dataPath: path.join(__dirname, 'sessions')
             }),
-            puppeteer: getPuppeteerOptions()
+            puppeteer: getPuppeteerOptions(),
+            authTimeoutMs: 60000
         });
 
-        activeClientsRef.set(sessionId, client);
+        activeClientsRef.set(sid, client);
 
         // 5. انتظار الجلسة لتكون جاهزة (timeout أقصر - 90 ثانية)
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sid);
                 try {
                     client.destroy().catch(() => { });
                 } catch (e) { }
@@ -144,19 +125,19 @@ async function autoRestartSession(sessionId) {
 
             client.on('disconnected', (reason) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sid);
                 reject(new Error(`Session disconnected during restart: ${reason}`));
             });
 
             client.on('auth_failure', (msg) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sid);
                 reject(new Error(`Authentication failed during restart: ${msg}`));
             });
 
             client.initialize().catch((initError) => {
                 cleanup();
-                activeClientsRef.delete(sessionId);
+                activeClientsRef.delete(sid);
                 reject(new Error(`Failed to initialize: ${initError.message}`));
             });
         });
@@ -347,7 +328,7 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
             console.log(`[${sessionId}] الجلسة غير صحية، محاولة إعادة التشغيل...`);
             try {
                 await autoRestartSession(sessionId);
-                const newClient = activeClientsRef.get(sessionId);
+                const newClient = activeClientsRef.get(String(sessionId));
                 if (newClient && await isClientHealthy(newClient)) {
                     await new Promise(r => setTimeout(r, 2000));
                     return await sendMessageSafe(newClient, chatId, content, options, maxRetries - 1, sessionId);
@@ -367,11 +348,11 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
                 await new Promise(r => setTimeout(r, 1000 * attempt));
             }
 
-            // إرسال مباشر مع timeout
+            // إرسال مباشر مع timeout (45 ثانية للسيرفرات أو الاتصالات البطيئة)
             const result = await Promise.race([
                 client.sendMessage(chatId, content, safeOptions),
                 new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('انتهت مهلة الإرسال')), 30000)
+                    setTimeout(() => reject(new Error('انتهت مهلة الإرسال')), 45000)
                 )
             ]);
 
@@ -389,7 +370,7 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
                     try {
                         console.log(`[${sessionId}] خطأ ${msg}, محاولة إعادة التشغيل...`);
                         await autoRestartSession(sessionId);
-                        const newClient = activeClientsRef.get(sessionId);
+                        const newClient = activeClientsRef.get(String(sessionId));
                         if (newClient && await isClientHealthy(newClient)) {
                             await new Promise(r => setTimeout(r, 2000));
                             return await sendMessageSafe(newClient, chatId, content, options, maxRetries - 1, sessionId);
