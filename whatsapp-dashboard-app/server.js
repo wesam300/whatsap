@@ -46,6 +46,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// ضروري عند تشغيل التطبيق خلف reverse proxy (nginx، إلخ) حتى يعمل rate limit و X-Forwarded-For بشكل صحيح
+app.set('trust proxy', 1);
+
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
 const corsOptions = {
