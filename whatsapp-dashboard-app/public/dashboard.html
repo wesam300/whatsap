@@ -1859,7 +1859,7 @@
         }
 
         function updateSessionStatus(sessionId, status) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.status = status;
                 renderSessions();
@@ -1867,7 +1867,7 @@
         }
 
         function updateSessionQR(sessionId, qrCode) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.qr_code = qrCode;
                 renderSessions();
@@ -1875,7 +1875,7 @@
         }
 
         function hideSessionQR(sessionId) {
-            const session = sessions.find(s => s.id === sessionId);
+            const session = sessions.find(s => String(s.id) === String(sessionId));
             if (session) {
                 session.qr_code = null;
                 renderSessions();

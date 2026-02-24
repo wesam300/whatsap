@@ -703,40 +703,48 @@ async function smartReconnect(sessionId, { db, activeClients, io, Client, LocalA
 // Session Folder Cleanup Helpers
 // ========================================
 
+async function killProcessesForSession(sessionId, execAsync) {
+    const pattern = `session-session_${sessionId}`;
+    let pids = [];
+    try {
+        const { stdout } = await execAsync(`pgrep -f "${pattern}"`);
+        pids = stdout.trim().split('\n').filter(Boolean);
+    } catch (e) { /* لا عمليات مطابقة */ }
+    pids = pids.filter(pid => pid !== String(process.pid));
+    if (pids.length > 0) {
+        console.log(`[${sessionId}] Killing ${pids.length} associated processes`);
+        await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => {});
+    }
+    return pids.length;
+}
+
 async function cleanSessionLocks(sessionId, sessionsDir) {
     try {
         const sessionPath = path.join(sessionsDir, `session-session_${sessionId}`);
-
-        // Kill associated Chrome processes
-        try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-
-            if (process.platform === 'linux' || process.platform === 'darwin') {
-                try {
-                    const { stdout } = await execAsync(`pgrep -f "session-session_${sessionId}"`);
-                    const pids = stdout.trim().split('\n').filter(Boolean);
-                    if (pids.length > 0) {
-                        console.log(`[${sessionId}] Killing ${pids.length} associated processes`);
-                        await execAsync(`kill -9 ${pids.join(' ')}`);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                    }
-                } catch (e) { /* no processes found - normal */ }
-            }
-        } catch (e) { /* ignore */ }
-
-        // Remove lock files
-        const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
         const fsPromises = require('fs').promises;
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
 
+        if (process.platform === 'linux' || process.platform === 'darwin') {
+            // جولة أولى: قتل العمليات ثم انتظار حتى تخرج العمليات الفرعية
+            await killProcessesForSession(sessionId, execAsync);
+            await new Promise(resolve => setTimeout(resolve, 2200));
+            // جولة ثانية: قتل أي عملية متبقية (مثلاً عمليات فرعية ظهرت بعد موت الأب)
+            const killed = await killProcessesForSession(sessionId, execAsync);
+            if (killed > 0) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+        }
+
+        // إزالة ملفات القفل
+        const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
         for (const lockFile of lockFiles) {
             const lockPath = path.join(sessionPath, lockFile);
             try {
                 await fsPromises.unlink(lockPath);
             } catch (e) {
                 if (e.code !== 'ENOENT') {
-                    // File exists but can't be deleted, try with retry
                     for (let i = 0; i < 3; i++) {
                         await new Promise(resolve => setTimeout(resolve, 500));
                         try {

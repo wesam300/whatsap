@@ -650,6 +650,15 @@
             margin-bottom: 20px;
         }
 
+        .empty-state.qr-state .qr-wrapper {
+            margin: 20px 0;
+        }
+        .empty-state.qr-state .qr-hint {
+            font-size: 13px;
+            color: #888;
+            margin-top: 10px;
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -862,6 +871,7 @@
             socket.on('session_ready', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('connected');
+                    loadSessionData();
                 }
             });
             
@@ -875,6 +885,19 @@
             socket.on('session_loading', function(data) {
                 if (data.sessionId == sessionId) {
                     updateSessionStatus('loading');
+                }
+            });
+
+            // تحديث رمز QR تلقائياً (واتساب يحدّثه دورياً — لا حاجة لإيقاف/تشغيل الجلسة)
+            socket.on('session_qr', function(data) {
+                if (data.sessionId == sessionId && data.qrCode) {
+                    const img = document.getElementById('sessionQRImage');
+                    if (img) {
+                        img.src = data.qrCode;
+                        img.style.display = '';
+                    }
+                    const placeholder = document.getElementById('sessionQRPlaceholder');
+                    if (placeholder) placeholder.style.display = 'none';
                 }
             });
             
@@ -1063,11 +1086,16 @@
                                 }
                             }
                         } else if (session.status === 'waiting_for_qr') {
+                            const qrSrc = session.qr_code || '';
                             document.getElementById('mainContent').innerHTML = `
-                                <div class="empty-state">
-                                    <h3>Waiting for QR Code</h3>
-                                    <p>This session is waiting for you to scan the QR code. Please go back to the dashboard and scan the QR code first.</p>
-                                    <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
+                                <div class="empty-state qr-state">
+                                    <h3>امسح رمز QR بتطبيق واتساب</h3>
+                                    <div class="qr-wrapper">
+                                        <img id="sessionQRImage" src="${qrSrc}" alt="QR Code" style="max-width:260px; border-radius:12px; ${qrSrc ? '' : 'display:none;'}">
+                                        <p id="sessionQRPlaceholder" style="${qrSrc ? 'display:none' : ''}">جاري تحميل رمز QR...</p>
+                                    </div>
+                                    <p class="qr-hint">يُحدّث تلقائياً كل دقيقة تقريباً — لا حاجة لإيقاف أو تشغيل الجلسة</p>
+                                    <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">العودة للوحة التحكم</button>
                                 </div>
                             `;
                         } else if (session.status === 'disconnected') {

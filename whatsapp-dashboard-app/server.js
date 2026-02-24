@@ -2074,6 +2074,10 @@ io.on('connection', (socket) => {
                 await destroyClientCompletely(sessionId, activeClients.get(String(sessionId)));
             }
 
+            // تجنب "The browser is already running": تنظيف أي عملية Chrome قديمة تستخدم نفس مجلد الجلسة
+            await cleanSessionLocks(sessionId, sessionsDir);
+            await new Promise(resolve => setTimeout(resolve, 2500));
+
             const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
             if (forceNewQR || session.status === 'auth_failure') {
                 try {
