@@ -105,6 +105,15 @@ const dailyMessageLimiter = rateLimit({
 // Global CORS
 app.use(cors(corsOptions));
 
+// تصحيح المسار عند وجود شرطة مزدوجة (/api//wa_xxx -> /api/wa_xxx) لتجنب فشل التوجيه
+app.use((req, res, next) => {
+    const q = req.url.indexOf('?');
+    const pathPart = q >= 0 ? req.url.slice(0, q) : req.url;
+    const queryPart = q >= 0 ? req.url.slice(q) : '';
+    req.url = pathPart.replace(/\/+/g, '/') + queryPart;
+    next();
+});
+
 // Apply rate limiting
 app.use(generalLimiter);
 app.use('/api', apiLimiter);
@@ -171,6 +180,9 @@ const reconnectingSessionsSet = new Set();
 
 // Store heartbeat intervals for sessions
 const sessionHeartbeats = new Map();
+
+// منع بدء نفس الجلسة مرتين في وقت واحد (حل تعارض "browser is already running")
+const sessionStartLocks = new Set();
 
 // تعيين مرجع activeClients في api-routes و invoice-routes
 apiRoutesSetActiveClientsRef(activeClients);
@@ -688,7 +700,8 @@ async function restartConnectedSessions() {
                         clientId: `session_${session.id}`,
                         dataPath: path.join(__dirname, 'sessions')
                     }),
-                    puppeteer: getPuppeteerOptions()
+                    puppeteer: getPuppeteerOptions(),
+                    authTimeoutMs: 60000
                 });
 
                 activeClients.set(String(session.id), client);
@@ -750,10 +763,12 @@ async function restoreDisconnectedSessionsWithData() {
                         shouldRestore = false;
                     }
 
-                    if (shouldRestore && !activeClients.has(String(session.id))) {
+                    if (shouldRestore && !activeClients.has(String(session.id)) && !sessionStartLocks.has(String(session.id))) {
                         try {
-                            // تنظيف مجلد الجلسة أولاً
+                            sessionStartLocks.add(String(session.id));
+                            // تنظيف مجلد الجلسة أولاً (قتل أي متصفح قديم + ملفات قفل)
                             await cleanupSessionFolder(session.id);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
 
                             const { Client, LocalAuth } = require('whatsapp-web.js');
 
@@ -762,7 +777,8 @@ async function restoreDisconnectedSessionsWithData() {
                                     clientId: `session_${session.id}`,
                                     dataPath: path.join(__dirname, 'sessions')
                                 }),
-                                puppeteer: getPuppeteerOptions()
+                                puppeteer: getPuppeteerOptions(),
+                                authTimeoutMs: 60000
                             });
 
                             activeClients.set(String(session.id), client);
@@ -778,8 +794,10 @@ async function restoreDisconnectedSessionsWithData() {
                             client.initialize().catch(err => {
                                 console.error(`[${session.id}] فشل التهيئة المبدئي:`, err.message);
                                 activeClients.delete(String(session.id));
+                                sessionStartLocks.delete(String(session.id));
                                 db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('disconnected', session.id);
                             });
+                            setTimeout(() => sessionStartLocks.delete(String(session.id)), 10000);
 
                             restoredCount++;
 
@@ -2269,6 +2287,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     socket.on('start_session', async (data) => {
+        const sid = data && data.sessionId != null ? String(data.sessionId) : null;
         try {
             const { sessionId, forceNewQR = false } = data;
 
@@ -2281,10 +2300,18 @@ io.on('connection', (socket) => {
                 return;
             }
 
+            // منع بدء نفس الجلسة مرتين في وقت واحد (تجنب "browser is already running")
+            if (sessionStartLocks.has(String(sessionId))) {
+                socket.emit('session_error', { error: 'الجلسة قيد التشغيل بالفعل، انتظر قليلاً ثم أعد المحاولة.' });
+                return;
+            }
+            sessionStartLocks.add(String(sessionId));
+
             // منع بدء جلسة منتهية الصلاحية
             if (session.expires_at) {
                 const row = db.prepare('SELECT datetime(?) <= CURRENT_TIMESTAMP as expired').get(session.expires_at);
                 if (row.expired) {
+                    sessionStartLocks.delete(String(sessionId));
                     socket.emit('session_error', { error: 'انتهت صلاحية الجلسة. يرجى التجديد.' });
                     return;
                 }
@@ -2295,6 +2322,7 @@ io.on('connection', (socket) => {
                 console.log(`Stopping existing session ${sessionId} before restart...`);
                 const existingClient = activeClients.get(String(sessionId));
                 await destroyClientCompletely(sessionId, existingClient);
+                await new Promise(r => setTimeout(r, 2500));
             }
 
             // حذف بيانات الجلسة فقط إذا طُلب QR جديد صراحة (forceNewQR = true)
@@ -2359,13 +2387,18 @@ io.on('connection', (socket) => {
                 updateStmt.run('waiting_for_qr', sessionId);
             }
 
-            // Create WhatsApp client
+            // تنظيف أي متصفح قديم أو ملفات قفل قبل فتح الجلسة (تجنب "browser is already running")
+            await cleanupSessionFolder(sessionId);
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Create WhatsApp client (مهلة مصادقة 60 ثانية للسيرفرات البطيئة)
             const client = new Client({
                 authStrategy: new LocalAuth({
                     clientId: `session_${sessionId}`,
                     dataPath: path.join(__dirname, 'sessions')
                 }),
-                puppeteer: getPuppeteerOptions()
+                puppeteer: getPuppeteerOptions(),
+                authTimeoutMs: 60000
             });
 
             activeClients.set(String(sessionId), client);
@@ -2561,11 +2594,15 @@ io.on('connection', (socket) => {
                 console.error(`[${sessionId}] فشل تهيئة الجلسة:`, err.message);
                 activeClients.delete(String(sessionId));
                 db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('disconnected', sessionId);
+                sessionStartLocks.delete(String(sessionId));
                 socket.emit('session_error', { error: err.message || 'Failed to start session' });
             });
+            // تحرير قفل البدء بعد 8 ثوانٍ (وقت كافٍ لظهور QR أو فشل التهيئة)
+            setTimeout(() => sessionStartLocks.delete(String(sessionId)), 8000);
 
         } catch (error) {
             console.error('Session start error:', error);
+            if (sid) sessionStartLocks.delete(sid);
             socket.emit('session_error', { error: 'Failed to start session' });
         }
     });
@@ -3090,6 +3127,9 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Dashboard Server running on port ${PORT}`);
     console.log(`📱 Open http://localhost:${PORT} in your browser`);
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your-secret-key-change-this-in-production') {
+        console.warn('⚠️ تحذير: SESSION_SECRET غير معيّن أو افتراضي. ضع متغير البيئة SESSION_SECRET في الإنتاج.');
+    }
 
     // تم تعطيل التنظيف التلقائي حسب طلب العميل: لا حذف جلسات تلقائي ولا إغلاق متصفح تلقائي
     // await cleanupChromeZombies();

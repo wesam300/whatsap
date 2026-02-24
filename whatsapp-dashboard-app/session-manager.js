@@ -88,10 +88,15 @@ async function killChromeProcessesForSession(sessionId) {
             await execAsync('powershell -NoProfile -Command "' + psScript + '" -ArgumentList "' + arg.replace(/"/g, '\\"') + '"').catch(() => { });
             await new Promise(r => setTimeout(r, 800));
         } else if (process.platform === 'linux' || process.platform === 'darwin') {
-            const { stdout } = await execAsync(`pgrep -f "${pattern}"`).catch(() => ({ stdout: '' }));
-            const pids = stdout.trim().split('\n').filter(Boolean);
-            if (pids.length > 0) {
-                await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => { });
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const { stdout } = await execAsync(`pgrep -f "${pattern}"`).catch(() => ({ stdout: '' }));
+                const pids = stdout.trim().split('\n').filter(Boolean);
+                if (pids.length > 0) {
+                    await execAsync(`kill -9 ${pids.join(' ')}`).catch(() => { });
+                    await new Promise(r => setTimeout(r, 1200));
+                } else {
+                    break;
+                }
             }
         }
     } catch (e) {
