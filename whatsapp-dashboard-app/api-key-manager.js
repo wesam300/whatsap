@@ -234,9 +234,13 @@ function logApiRequest(userId, apiKeyId, sessionTokenId, endpoint, method, statu
                     INSERT INTO api_logs (user_id, api_key_id, session_token_id, endpoint, method, status_code, response_time, ip_address, user_agent)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
-                fallback.run(userId, null, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
-            } catch (e) {
-                console.error('Error logging API request (fallback):', e.message);
+                fallback.run(userId, apiKeyId, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
+            } catch (e2) {
+                try {
+                    fallback.run(userId, null, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
+                } catch (e3) {
+                    console.error('Error logging API request:', e3.message);
+                }
             }
         } else {
             console.error('Error logging API request:', error.message);

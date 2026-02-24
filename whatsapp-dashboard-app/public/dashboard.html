@@ -561,6 +561,11 @@
             background: #e2e3e5;
             color: #383d41;
         }
+
+        .status-connecting, .status-opening, .status-pairing {
+            background: #cce5ff;
+            color: #004085;
+        }
         
         .stats-grid {
             display: grid;
@@ -1346,6 +1351,20 @@
                 updateSessionStatus(data.sessionId, 'connected');
                 hideSessionQR(data.sessionId);
             });
+
+            socket.on('session_state', function(data) {
+                if (data && data.sessionId != null && data.state) {
+                    updateSessionStatus(data.sessionId, data.state);
+                }
+            });
+
+            // عند استقبال بيانات الجلسة (تُرسل بعد ready) نحدّث الحالة إلى connected
+            // لضمان تحديث الواجهة حتى لو فات حدث session_ready (مثلاً عند إعادة اتصال السوكيت)
+            socket.on('session_data', function(data) {
+                if (data && data.sessionId != null) {
+                    updateSessionStatus(data.sessionId, 'connected');
+                }
+            });
             
             socket.on('session_auth_failure', function(data) {
                 updateSessionStatus(data.sessionId, 'auth_failure');
@@ -1564,10 +1583,22 @@
             `;
         }
 
+        const STATUS_LABELS = {
+            connecting: 'جاري الاتصال',
+            opening: 'جاري الفتح',
+            pairing: 'جاري المزاوجة',
+            connected: 'متصل',
+            authenticated: 'تم التحقق',
+            waiting_for_qr: 'في انتظار QR',
+            loading: 'جاري التحميل',
+            disconnected: 'غير متصل',
+            auth_failure: 'فشل التحقق'
+        };
+
         function createSessionCard(session) {
             const t = translations[currentLanguage];
-            const statusClass = `status-${session.status}`;
-            const statusText = session.status.replace('_', ' ').toUpperCase();
+            const statusClass = `status-${(session.status || '').replace(/[^a-z_]/gi, '')}`;
+            const statusText = STATUS_LABELS[session.status] || (session.status || '').replace(/_/g, ' ').toUpperCase();
             
             // حساب معلومات انتهاء الصلاحية
             const now = new Date();
@@ -1580,12 +1611,9 @@
                 actionButtons = `<button class="btn btn-success" onclick="startSession(${session.id})">${t.start}</button>`;
             } else if (session.status === 'waiting_for_qr') {
                 actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>`;
-            } else if (session.status === 'connected') {
-                actionButtons = `
-                    <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
-                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>
-                `;
-            } else if (session.status === 'authenticated') {
+            } else if (['connecting', 'opening', 'pairing', 'loading'].includes(session.status)) {
+                actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>`;
+            } else if (session.status === 'connected' || session.status === 'authenticated') {
                 actionButtons = `
                     <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
                     <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>

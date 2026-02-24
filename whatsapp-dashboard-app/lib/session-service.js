@@ -227,6 +227,16 @@ class SessionService {
         });
         client.on('change_state', (state) => {
             console.log(`[${sessionId}] حالة: ${state}`);
+            const normalized = (state && typeof state === 'string') ? state.toLowerCase() : '';
+            if (!normalized) return;
+            if (['connecting', 'opening', 'pairing', 'connected'].includes(normalized)) {
+                this._updateStatus(sessionId, normalized);
+                this.io.emit('session_state', { sessionId, state: normalized });
+            }
+            if (normalized === 'disconnected' || normalized === 'timeout') {
+                this._updateStatus(sessionId, 'disconnected');
+                this.io.emit('session_state', { sessionId, state: 'disconnected' });
+            }
         });
         client.on('disconnected', async (reason) => {
             if (this.reconnecting.has(sid)) return;
@@ -275,6 +285,7 @@ class SessionService {
     async stopSession(sessionId, client = null) {
         const c = client || this.clients.get(this._sid(sessionId));
         if (!c) return;
+        this.startLocks.delete(this._sid(sessionId));
         this._stopHeartbeat(sessionId);
         if (this.reconnectTimers.has(this._sid(sessionId))) {
             clearTimeout(this.reconnectTimers.get(this._sid(sessionId)));
@@ -305,7 +316,7 @@ class SessionService {
             this._updateStatus(sessionId, options.status || 'connecting');
             return client;
         } finally {
-            setTimeout(() => this.startLocks.delete(sid), 10000);
+            this.startLocks.delete(sid);
         }
     }
 
@@ -334,7 +345,7 @@ class SessionService {
             }
         }
 
-        const toRestore = this.db.prepare('SELECT * FROM sessions WHERE status IN (?, ?, ?)').all('disconnected', 'connecting', 'authenticated');
+        const toRestore = this.db.prepare('SELECT * FROM sessions WHERE status IN (?, ?, ?, ?, ?)').all('disconnected', 'connecting', 'authenticated', 'opening', 'pairing');
         let restored = 0;
         for (const session of toRestore) {
             try {

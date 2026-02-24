@@ -113,7 +113,17 @@ const JSON_LIMIT = '10mb';
 const jsonParser = express.json({ limit: JSON_LIMIT, strict: false });
 app.use((req, res, next) => {
     const ct = req.headers['content-type'] || '';
-    if (!ct.includes('application/json')) return jsonParser(req, res, next);
+    if (!ct.includes('application/json')) {
+        return jsonParser(req, res, (err) => {
+            if (err) {
+                const msg = (err.message || '').includes('control character')
+                    ? 'محتوى الطلب يحتوي على أحرف تحكم غير مسموحة. استخدم \\n للأسطر الجديدة في النص.'
+                    : 'يرجى التحقق من تنسيق JSON والبيانات المرسلة.';
+                return res.status(400).json({ success: false, error: 'خطأ في تنسيق JSON', details: msg });
+            }
+            next();
+        });
+    }
     const chunks = [];
     let len = 0;
     const limit = 10 * 1024 * 1024;
@@ -129,7 +139,7 @@ app.use((req, res, next) => {
             req.body = JSON.parse(str || '{}');
             next();
         } catch (e) {
-            res.status(400).json({ success: false, error: 'خطأ في تنسيق JSON', details: 'يرجى التحقق من البيانات المرسلة' });
+            res.status(400).json({ success: false, error: 'خطأ في تنسيق JSON', details: 'يرجى التحقق من البيانات المرسلة. استخدم \\n للأسطر الجديدة.' });
         }
     });
     req.on('error', () => res.status(400).end());

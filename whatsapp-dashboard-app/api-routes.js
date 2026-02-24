@@ -360,14 +360,23 @@ async function sendMessageSafe(client, chatId, content, options = {}, maxRetries
                 await new Promise(r => setTimeout(r, 1000 * attempt));
             }
 
-            // إرسال مباشر مع timeout (45 ثانية للسيرفرات أو الاتصالات البطيئة)
-            const result = await Promise.race([
-                client.sendMessage(chatId, content, safeOptions),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('انتهت مهلة الإرسال')), 45000)
-                )
-            ]);
-
+            // إرسال مباشر مع timeout (60 ثانية) — لا نُرجع نجاحاً إلا بعد استلام كائن الرسالة من واتساب
+            let timeoutId;
+            const timeoutPromise = new Promise((_, reject) => {
+                timeoutId = setTimeout(() => reject(new Error('انتهت مهلة الإرسال')), 60000);
+            });
+            let result;
+            try {
+                result = await Promise.race([
+                    client.sendMessage(chatId, content, safeOptions),
+                    timeoutPromise
+                ]);
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+            if (!result || typeof result !== 'object' || !result.id) {
+                throw new Error('لم يتلقَ الخادم تأكيد إرسال الرسالة من واتساب');
+            }
             return result;
 
         } catch (error) {
@@ -501,9 +510,12 @@ router.post('/send-message', messageLimiter, dailyMessageLimiter, validateApiKey
         } else if (error.message.includes('العميل غير جاهز') || error.message.includes('غير متاح')) {
             errorMessage = 'الجلسة غير متصلة. يرجى التأكد من أن الجلسة نشطة ومتصلة.';
             errorCode = 'SESSION_NOT_READY';
-        } else if (error.message.includes('Timeout')) {
+        } else if (error.message.includes('Timeout') || (error.message && error.message.includes('انتهت مهلة'))) {
             errorMessage = 'انتهت مهلة الانتظار. يرجى المحاولة مرة أخرى.';
             errorCode = 'TIMEOUT';
+        } else if (error.message && error.message.includes('لم يتلقَ الخادم تأكيد إرسال الرسالة')) {
+            errorMessage = 'لم يتم تأكيد إرسال الرسالة من واتساب. جرّب مرة أخرى أو أعد تشغيل الجلسة.';
+            errorCode = 'SEND_VERIFY_FAILED';
         }
 
         res.status(500).json({
@@ -639,9 +651,12 @@ router.post('/:apiKey/send-message', messageLimiter, dailyMessageLimiter, valida
         } else if (error.message.includes('العميل غير جاهز') || error.message.includes('غير متاح')) {
             errorMessage = 'الجلسة غير متصلة. يرجى التأكد من أن الجلسة نشطة ومتصلة.';
             errorCode = 'SESSION_NOT_READY';
-        } else if (error.message.includes('Timeout')) {
+        } else if (error.message.includes('Timeout') || (error.message && error.message.includes('انتهت مهلة'))) {
             errorMessage = 'انتهت مهلة الانتظار. يرجى المحاولة مرة أخرى.';
             errorCode = 'TIMEOUT';
+        } else if (error.message && error.message.includes('لم يتلقَ الخادم تأكيد إرسال الرسالة')) {
+            errorMessage = 'لم يتم تأكيد إرسال الرسالة من واتساب. جرّب مرة أخرى أو أعد تشغيل الجلسة.';
+            errorCode = 'SEND_VERIFY_FAILED';
         }
 
         res.status(500).json({
