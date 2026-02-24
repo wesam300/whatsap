@@ -356,7 +356,7 @@ class Message extends Base {
     
     /**
      * Returns groups mentioned in this message
-     * @returns {Promise<Array<GroupChat>>}
+     * @returns {Promise<GroupChat[]|[]>}
      */
     async getGroupMentions() {
         return await Promise.all(this.groupMentions.map(async (m) => await this.client.getChatById(m.groupJid._serialized)));
@@ -449,9 +449,7 @@ class Message extends Base {
 
         const result = await this.client.pupPage.evaluate(async (msgId) => {
             const msg = window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-
-            // REUPLOADING mediaStage means the media is expired and the download button is spinning, cannot be downloaded now
-            if (!msg || !msg.mediaData || msg.mediaData.mediaStage === 'REUPLOADING') {
+            if (!msg || !msg.mediaData) {
                 return null;
             }
             if (msg.mediaData.mediaStage != 'RESOLVED') {
@@ -468,10 +466,6 @@ class Message extends Base {
             }
 
             try {
-                const mockQpl = {
-                    addAnnotations: function() { return this; },
-                    addPoint: function() { return this; }
-                };
                 const decryptedMedia = await window.Store.DownloadManager.downloadAndMaybeDecrypt({
                     directPath: msg.directPath,
                     encFilehash: msg.encFilehash,
@@ -479,8 +473,7 @@ class Message extends Base {
                     mediaKey: msg.mediaKey,
                     mediaKeyTimestamp: msg.mediaKeyTimestamp,
                     type: msg.type,
-                    signal: (new AbortController).signal,
-                    downloadQpl: mockQpl
+                    signal: (new AbortController).signal
                 });
 
                 const data = await window.WWebJS.arrayBufferToBase64Async(decryptedMedia);
@@ -515,10 +508,14 @@ class Message extends Base {
                 window.Store.MsgActionChecks.canSenderRevokeMsg(msg) || window.Store.MsgActionChecks.canAdminRevokeMsg(msg);
 
             if (everyone && canRevoke) {
-                return window.Store.Cmd.sendRevokeMsgs(chat, { list: [msg], type: 'message' }, { clearMedia: clearMedia });
+                return window.compareWwebVersions(window.Debug.VERSION, '>=', '2.3000.0')
+                    ? window.Store.Cmd.sendRevokeMsgs(chat, { list: [msg], type: 'message' }, { clearMedia: clearMedia })
+                    : window.Store.Cmd.sendRevokeMsgs(chat, [msg], { clearMedia: true, type: msg.id.fromMe ? 'Sender' : 'Admin' });
             }
 
-            return window.Store.Cmd.sendDeleteMsgs(chat, { list: [msg], type: 'message' }, clearMedia);
+            return window.compareWwebVersions(window.Debug.VERSION, '>=', '2.3000.0')
+                ? window.Store.Cmd.sendDeleteMsgs(chat, { list: [msg], type: 'message' }, clearMedia)
+                : window.Store.Cmd.sendDeleteMsgs(chat, [msg], clearMedia);
         }, this.id._serialized, everyone, clearMedia);
     }
 
@@ -565,7 +562,7 @@ class Message extends Base {
      */
     async unpin() {
         return await this.client.pupPage.evaluate(async (msgId) => {
-            return await window.WWebJS.pinUnpinMsgAction(msgId, 2, 0);
+            return await window.WWebJS.pinUnpinMsgAction(msgId, 2);
         }, this.id._serialized);
     }
 
@@ -744,39 +741,6 @@ class Message extends Base {
         }, this.id._serialized, editedEventObject);
 
         return edittedEventMsg && new Message(this.client, edittedEventMsg);
-    }
-    /**
-     * Returns the PollVote this poll message
-     * @returns {Promise<PollVote[]>}
-     */
-    async getPollVotes() {
-        return await this.client.getPollVotes(this.id._serialized);
-    }
-
-    /**
-     * Send votes to the poll message
-     * @param {Array<string>} selectedOptions Array of options selected.
-     * @returns {Promise}
-     */
-    async vote(selectedOptions) {
-        if (this.type != MessageTypes.POLL_CREATION) throw 'Invalid usage! Can only be used with a pollCreation message';
-
-        await this.client.pupPage.evaluate(async (messageId, votes) => {
-            if (!messageId) return null;
-            if (!Array.isArray(votes)) votes = [votes];
-            let localIdSet = new Set();
-            const msg =
-                window.Store.Msg.get(messageId) || (await window.Store.Msg.getMessagesById([messageId]))?.messages?.[0];
-            if (!msg) return null;
-
-            msg.pollOptions.forEach(a => {
-                for (const option of votes) {
-                    if (a.name === option) localIdSet.add(a.localId);
-                }
-            });
-
-            await window.Store.PollsSendVote.sendVote(msg, localIdSet);
-        }, this.id._serialized, selectedOptions);
     }
 }
 

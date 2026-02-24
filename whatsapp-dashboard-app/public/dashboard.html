@@ -561,11 +561,6 @@
             background: #e2e3e5;
             color: #383d41;
         }
-
-        .status-connecting, .status-opening, .status-pairing {
-            background: #cce5ff;
-            color: #004085;
-        }
         
         .stats-grid {
             display: grid;
@@ -1179,7 +1174,6 @@
     <script>
         let socket;
         let sessions = [];
-        let qrPollingInterval = null;
         let currentLanguage = 'ar'; // اللغة الافتراضية
 
         // دالة لعرض التاريخ الميلادي بشكل صريح
@@ -1331,15 +1325,24 @@
             loadSessions();
             initializeSocket();
             bootstrapUser();
+            // تحديث تلقائي كل 4 ثوانٍ لعرض رمز QR وحالة الجلسات دون الحاجة للـ refresh
+            if (sessionPollInterval) clearInterval(sessionPollInterval);
+            sessionPollInterval = setInterval(function() {
+                loadSessions(true);
+            }, 4000);
         });
+
+        let sessionPollInterval = null;
 
         function initializeSocket() {
             socket = io();
             
             socket.on('qr_code', function(data) {
-                if (data && data.sessionId != null && data.qrCode) {
-                    updateSessionQR(data.sessionId, data.qrCode);
-                }
+                updateSessionQR(data.sessionId, data.qrCode);
+            });
+            // دعم الاسم القديم للحدث من السيرفر
+            socket.on('session_qr', function(data) {
+                updateSessionQR(data.sessionId, data.qrCode);
             });
             
             socket.on('session_authenticated', function(data) {
@@ -1350,20 +1353,6 @@
             socket.on('session_ready', function(data) {
                 updateSessionStatus(data.sessionId, 'connected');
                 hideSessionQR(data.sessionId);
-            });
-
-            socket.on('session_state', function(data) {
-                if (data && data.sessionId != null && data.state) {
-                    updateSessionStatus(data.sessionId, data.state);
-                }
-            });
-
-            // عند استقبال بيانات الجلسة (تُرسل بعد ready) نحدّث الحالة إلى connected
-            // لضمان تحديث الواجهة حتى لو فات حدث session_ready (مثلاً عند إعادة اتصال السوكيت)
-            socket.on('session_data', function(data) {
-                if (data && data.sessionId != null) {
-                    updateSessionStatus(data.sessionId, 'connected');
-                }
             });
             
             socket.on('session_auth_failure', function(data) {
@@ -1465,35 +1454,27 @@
             });
         }
 
-        async function loadSessions() {
+        /** تحديث قائمة الجلسات. إذا silent=true فلا نعرض رسالة خطأ عند الفشل (مفيد للتحديث التلقائي). */
+        async function loadSessions(silent = false) {
             try {
                 const response = await fetch('/api/sessions');
                 if (response.ok) {
                     sessions = await response.json();
                     renderSessions();
-                    checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
-                    // استطلاع دوري عند انتظار QR حتى يظهر الرمز من قاعدة البيانات إذا فات حدث Socket
-                    if (sessions.some(s => s.status === 'waiting_for_qr')) {
-                        if (!qrPollingInterval) {
-                            qrPollingInterval = setInterval(loadSessions, 3000);
-                        }
-                    } else {
-                        if (qrPollingInterval) {
-                            clearInterval(qrPollingInterval);
-                            qrPollingInterval = null;
-                        }
-                    }
+                    if (!silent) checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
                 } else {
-                    throw new Error('Failed to load sessions');
+                    if (!silent) throw new Error('Failed to load sessions');
                 }
             } catch (error) {
-                console.error('Error loading sessions:', error);
-                document.getElementById('sessionsContainer').innerHTML = `
-                    <div class="empty-state">
-                        <h3>خطأ في تحميل الجلسات</h3>
-                        <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
-                    </div>
-                `;
+                if (!silent) {
+                    console.error('Error loading sessions:', error);
+                    document.getElementById('sessionsContainer').innerHTML = `
+                        <div class="empty-state">
+                            <h3>خطأ في تحميل الجلسات</h3>
+                            <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
+                        </div>
+                    `;
+                }
             }
         }
 
@@ -1583,22 +1564,10 @@
             `;
         }
 
-        const STATUS_LABELS = {
-            connecting: 'جاري الاتصال',
-            opening: 'جاري الفتح',
-            pairing: 'جاري المزاوجة',
-            connected: 'متصل',
-            authenticated: 'تم التحقق',
-            waiting_for_qr: 'في انتظار QR',
-            loading: 'جاري التحميل',
-            disconnected: 'غير متصل',
-            auth_failure: 'فشل التحقق'
-        };
-
         function createSessionCard(session) {
             const t = translations[currentLanguage];
-            const statusClass = `status-${(session.status || '').replace(/[^a-z_]/gi, '')}`;
-            const statusText = STATUS_LABELS[session.status] || (session.status || '').replace(/_/g, ' ').toUpperCase();
+            const statusClass = `status-${session.status}`;
+            const statusText = session.status.replace('_', ' ').toUpperCase();
             
             // حساب معلومات انتهاء الصلاحية
             const now = new Date();
@@ -1611,9 +1580,12 @@
                 actionButtons = `<button class="btn btn-success" onclick="startSession(${session.id})">${t.start}</button>`;
             } else if (session.status === 'waiting_for_qr') {
                 actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>`;
-            } else if (['connecting', 'opening', 'pairing', 'loading'].includes(session.status)) {
-                actionButtons = `<button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>`;
-            } else if (session.status === 'connected' || session.status === 'authenticated') {
+            } else if (session.status === 'connected') {
+                actionButtons = `
+                    <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
+                    <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>
+                `;
+            } else if (session.status === 'authenticated') {
                 actionButtons = `
                     <button class="btn btn-primary" onclick="viewSession(${session.id})">${t.openSession}</button>
                     <button class="btn btn-secondary" onclick="stopSession(${session.id})">${t.stop}</button>
@@ -1714,7 +1686,7 @@
         }
 
         function updateSessionStatus(sessionId, status) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.status = status;
                 renderSessions();
@@ -1722,16 +1694,15 @@
         }
 
         function updateSessionQR(sessionId, qrCode) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.qr_code = qrCode;
-                session.status = 'waiting_for_qr';
                 renderSessions();
             }
         }
 
         function hideSessionQR(sessionId) {
-            const session = sessions.find(s => String(s.id) === String(sessionId));
+            const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 session.qr_code = null;
                 renderSessions();

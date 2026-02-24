@@ -267,74 +267,8 @@ try {
     console.log(`   ⚠️ تحذير: فشل في تنظيف الجلسات المحذوفة: ${error.message}`);
 }
 
-// تحديث حزم npm
-console.log('\n📦 تحديث حزم npm...');
-try {
-    const { execSync } = require('child_process');
-    const packageJsonPath = path.join(__dirname, 'package.json');
-    
-    if (fs.existsSync(packageJsonPath)) {
-        console.log('   🔍 التحقق من الإصدارات الحالية...');
-        try {
-            const currentVersion = execSync('npm list whatsapp-web.js --depth=0', { 
-                encoding: 'utf8', 
-                cwd: __dirname,
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
-            console.log('   📋 الإصدار الحالي:');
-            console.log('   ' + currentVersion.split('\n').filter(line => line.includes('whatsapp-web.js')).join('\n   '));
-        } catch (e) {
-            console.log('   ⚠️ لا يمكن قراءة الإصدار الحالي');
-        }
-        
-        console.log('\n   🔄 تحديث whatsapp-web.js إلى أحدث إصدار...');
-        try {
-            const output = execSync('npm install whatsapp-web.js@latest --save', { 
-                encoding: 'utf8', 
-                cwd: __dirname,
-                stdio: 'inherit'
-            });
-            console.log('   ✅ تم تحديث whatsapp-web.js بنجاح!');
-        } catch (e) {
-            console.log(`   ⚠️ خطأ في تحديث whatsapp-web.js: ${e.message}`);
-            console.log('   💡 يمكنك تحديثها يدوياً باستخدام: npm install whatsapp-web.js@latest');
-        }
-        
-        console.log('\n   🔄 تحديث جميع الحزم الأخرى...');
-        try {
-            execSync('npm update', { 
-                encoding: 'utf8', 
-                cwd: __dirname,
-                stdio: 'inherit'
-            });
-            console.log('   ✅ تم تحديث جميع الحزم بنجاح!');
-        } catch (e) {
-            console.log(`   ⚠️ خطأ في تحديث الحزم: ${e.message}`);
-        }
-        
-        // عرض الإصدار الجديد
-        console.log('\n   📋 الإصدار الجديد:');
-        try {
-            const newVersion = execSync('npm list whatsapp-web.js --depth=0', { 
-                encoding: 'utf8', 
-                cwd: __dirname,
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
-            console.log('   ' + newVersion.split('\n').filter(line => line.includes('whatsapp-web.js')).join('\n   '));
-        } catch (e) {
-            // تجاهل الخطأ
-        }
-    } else {
-        console.log('   ⚠️ ملف package.json غير موجود');
-    }
-} catch (error) {
-    console.log(`   ⚠️ تحذير: فشل في تحديث الحزم: ${error.message}`);
-    console.log('   💡 يمكنك تحديثها يدوياً باستخدام: npm install whatsapp-web.js@latest && npm update');
-}
-
 console.log('\n🎉 تم الانتهاء من التحديث!');
 console.log('📝 تعليمات التشغيل:');
 console.log('1. تأكد من رفع جميع الملفات المحدثة');
-console.log('2. قم بتشغيل: npm install (إذا تم تحديث package.json)');
-console.log('3. قم بتشغيل: pm2 restart whatsapp');
-console.log('4. تحقق من السجلات: pm2 logs whatsapp');
+console.log('2. قم بتشغيل: pm2 restart whatsapp');
+console.log('3. تحقق من السجلات: pm2 logs whatsapp');

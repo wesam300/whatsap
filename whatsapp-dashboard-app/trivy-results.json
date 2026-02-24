@@ -1,0 +1,974 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2025-12-06T03:52:21.4758388+03:00",
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Metadata": {
+    "ImageConfig": {
+      "architecture": "",
+      "created": "0001-01-01T00:00:00Z",
+      "os": "",
+      "rootfs": {
+        "type": "",
+        "diff_ids": null
+      },
+      "config": {}
+    }
+  },
+  "Results": [
+    {
+      "Target": "functions/package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2025-65945",
+          "PkgID": "jws@3.2.2",
+          "PkgName": "jws",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/jws@3.2.2",
+            "UID": "da578376c42b76b7"
+          },
+          "InstalledVersion": "3.2.2",
+          "FixedVersion": "3.2.3, 4.0.1",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-65945",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "auth0/node-jws Improperly Verifies HMAC Signature",
+          "Description": "auth0/node-jws is a JSON Web Signature implementation for Node.js. In versions 3.2.2 and earlier and version 4.0.0, auth0/node-jws has an improper signature verification vulnerability when using the HS256 algorithm under specific conditions. Applications are affected when they use the jws.createVerify() function for HMAC algorithms and use user-provided data from the JSON Web Signature protected header or payload in HMAC secret lookup routines, which can allow attackers to bypass signature verification. This issue has been patched in versions 3.2.3 and 4.0.1.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-347"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/auth0/node-jws",
+            "https://github.com/auth0/node-jws/commit/34c45b2c04434f925b638de6a061de9339c0ea2e",
+            "https://github.com/auth0/node-jws/commit/4f6e73f24df42f07d632dec6431ade8eda8d11a6",
+            "https://github.com/auth0/node-jws/releases/tag/v3.2.3",
+            "https://github.com/auth0/node-jws/releases/tag/v4.0.1",
+            "https://github.com/auth0/node-jws/security/advisories/GHSA-869p-cjfg-cm3x",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-65945"
+          ],
+          "PublishedDate": "2025-12-04T19:16:05.55Z",
+          "LastModifiedDate": "2025-12-04T19:16:05.55Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-65945",
+          "PkgID": "jws@4.0.0",
+          "PkgName": "jws",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/jws@4.0.0",
+            "UID": "40c14fba17509b4a"
+          },
+          "InstalledVersion": "4.0.0",
+          "FixedVersion": "3.2.3, 4.0.1",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-65945",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "auth0/node-jws Improperly Verifies HMAC Signature",
+          "Description": "auth0/node-jws is a JSON Web Signature implementation for Node.js. In versions 3.2.2 and earlier and version 4.0.0, auth0/node-jws has an improper signature verification vulnerability when using the HS256 algorithm under specific conditions. Applications are affected when they use the jws.createVerify() function for HMAC algorithms and use user-provided data from the JSON Web Signature protected header or payload in HMAC secret lookup routines, which can allow attackers to bypass signature verification. This issue has been patched in versions 3.2.3 and 4.0.1.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-347"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/auth0/node-jws",
+            "https://github.com/auth0/node-jws/commit/34c45b2c04434f925b638de6a061de9339c0ea2e",
+            "https://github.com/auth0/node-jws/commit/4f6e73f24df42f07d632dec6431ade8eda8d11a6",
+            "https://github.com/auth0/node-jws/releases/tag/v3.2.3",
+            "https://github.com/auth0/node-jws/releases/tag/v4.0.1",
+            "https://github.com/auth0/node-jws/security/advisories/GHSA-869p-cjfg-cm3x",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-65945"
+          ],
+          "PublishedDate": "2025-12-04T19:16:05.55Z",
+          "LastModifiedDate": "2025-12-04T19:16:05.55Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-12816",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "c75bab0242d9d5bc"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-12816",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "An interpretation-conflict (CWE-436) vulnerability in node-forge versi ...",
+          "Description": "An interpretation-conflict (CWE-436) vulnerability in node-forge versions 1.3.1 and earlier enables unauthenticated attackers to craft ASN.1 structures to desynchronize schema validations, yielding a semantic divergence that may bypass downstream cryptographic verifications and security decisions.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-436"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:H/A:N",
+              "V3Score": 8.6
+            }
+          },
+          "References": [
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/asn1.js#L1153",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/ed25519.js#L81",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pbe.js#L363",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pkcs12.js#L328",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pkcs7.js#L90",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/rsa.js#L1167",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/x509.js#L667",
+            "https://github.com/digitalbazaar/forge/pull/1124",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-5gfm-wpxj-wjgq",
+            "https://kb.cert.org/vuls/id/521113",
+            "https://www.kb.cert.org/vuls/id/521113",
+            "https://www.npmjs.com/package/node-forge"
+          ],
+          "PublishedDate": "2025-11-25T20:15:58.87Z",
+          "LastModifiedDate": "2025-11-25T22:16:16.69Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-66031",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "c75bab0242d9d5bc"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-66031",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "node-forge: node-forge ASN.1 Unbounded Recursion",
+          "Description": "Forge (also called `node-forge`) is a native implementation of Transport Layer Security in JavaScript. An Uncontrolled Recursion vulnerability in node-forge versions 1.3.1 and below enables remote, unauthenticated attackers to craft deep ASN.1 structures that trigger unbounded recursive parsing. This leads to a Denial-of-Service (DoS) via stack exhaustion when parsing untrusted DER inputs. This issue has been patched in version 1.3.2.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-674"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-66031",
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/commit/260425c6167a38aae038697132483b5517b26451",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-554w-wpv2-vw27",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-66031",
+            "https://www.cve.org/CVERecord?id=CVE-2025-66031"
+          ],
+          "PublishedDate": "2025-11-26T23:15:49.397Z",
+          "LastModifiedDate": "2025-12-01T15:39:33.11Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-66030",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "c75bab0242d9d5bc"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-66030",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "Forge (also called `node-forge`) is a native implementation of Transpo ...",
+          "Description": "Forge (also called `node-forge`) is a native implementation of Transport Layer Security in JavaScript. An Integer Overflow vulnerability in node-forge versions 1.3.1 and below enables remote, unauthenticated attackers to craft ASN.1 structures containing OIDs with oversized arcs. These arcs may be decoded as smaller, trusted OIDs due to 32-bit bitwise truncation, enabling the bypass of downstream OID-based security decisions. This issue has been patched in version 1.3.2.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-190"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "References": [
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/commit/3e0c35ace169cfca529a3e547a7848dc7bf57fdb",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-65ch-62r8-g69g",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-66030"
+          ],
+          "PublishedDate": "2025-11-26T23:15:49.237Z",
+          "LastModifiedDate": "2025-12-01T15:39:33.11Z"
+        }
+      ]
+    },
+    {
+      "Target": "package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2025-58754",
+          "PkgID": "axios@1.11.0",
+          "PkgName": "axios",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/axios@1.11.0",
+            "UID": "fad6c996fd876243"
+          },
+          "InstalledVersion": "1.11.0",
+          "FixedVersion": "1.12.0, 0.30.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-58754",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "axios: Axios DoS via lack of data size check",
+          "Description": "Axios is a promise based HTTP client for the browser and Node.js. When Axios prior to versions 0.30.2 and 1.12.0 runs on Node.js and is given a URL with the `data:` scheme, it does not perform HTTP. Instead, its Node http adapter decodes the entire payload into memory (`Buffer`/`Blob`) and returns a synthetic 200 response. This path ignores `maxContentLength` / `maxBodyLength` (which only protect HTTP responses), so an attacker can supply a very large `data:` URI and cause the process to allocate unbounded memory and crash (DoS), even if the caller requested `responseType: 'stream'`. Versions 0.30.2 and 1.12.0 contain a patch for the issue.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-58754",
+            "https://github.com/axios/axios",
+            "https://github.com/axios/axios/commit/945435fc51467303768202250debb8d4ae892593",
+            "https://github.com/axios/axios/commit/a1b1d3f073a988601583a604f5f9f5d05a3d0b67",
+            "https://github.com/axios/axios/pull/7011",
+            "https://github.com/axios/axios/pull/7034",
+            "https://github.com/axios/axios/releases/tag/v0.30.2",
+            "https://github.com/axios/axios/releases/tag/v1.12.0",
+            "https://github.com/axios/axios/security/advisories/GHSA-4hjh-wcwx-xvwj",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-58754",
+            "https://www.cve.org/CVERecord?id=CVE-2025-58754"
+          ],
+          "PublishedDate": "2025-09-12T02:15:46.873Z",
+          "LastModifiedDate": "2025-10-24T20:56:49.43Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-65945",
+          "PkgID": "jws@3.2.2",
+          "PkgName": "jws",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/jws@3.2.2",
+            "UID": "67efe9935476000d"
+          },
+          "InstalledVersion": "3.2.2",
+          "FixedVersion": "3.2.3, 4.0.1",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-65945",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "auth0/node-jws Improperly Verifies HMAC Signature",
+          "Description": "auth0/node-jws is a JSON Web Signature implementation for Node.js. In versions 3.2.2 and earlier and version 4.0.0, auth0/node-jws has an improper signature verification vulnerability when using the HS256 algorithm under specific conditions. Applications are affected when they use the jws.createVerify() function for HMAC algorithms and use user-provided data from the JSON Web Signature protected header or payload in HMAC secret lookup routines, which can allow attackers to bypass signature verification. This issue has been patched in versions 3.2.3 and 4.0.1.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-347"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/auth0/node-jws",
+            "https://github.com/auth0/node-jws/commit/34c45b2c04434f925b638de6a061de9339c0ea2e",
+            "https://github.com/auth0/node-jws/commit/4f6e73f24df42f07d632dec6431ade8eda8d11a6",
+            "https://github.com/auth0/node-jws/releases/tag/v3.2.3",
+            "https://github.com/auth0/node-jws/releases/tag/v4.0.1",
+            "https://github.com/auth0/node-jws/security/advisories/GHSA-869p-cjfg-cm3x",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-65945"
+          ],
+          "PublishedDate": "2025-12-04T19:16:05.55Z",
+          "LastModifiedDate": "2025-12-04T19:16:05.55Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-65945",
+          "PkgID": "jws@4.0.0",
+          "PkgName": "jws",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/jws@4.0.0",
+            "UID": "5620e67f8bdcc8a9"
+          },
+          "InstalledVersion": "4.0.0",
+          "FixedVersion": "3.2.3, 4.0.1",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-65945",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "auth0/node-jws Improperly Verifies HMAC Signature",
+          "Description": "auth0/node-jws is a JSON Web Signature implementation for Node.js. In versions 3.2.2 and earlier and version 4.0.0, auth0/node-jws has an improper signature verification vulnerability when using the HS256 algorithm under specific conditions. Applications are affected when they use the jws.createVerify() function for HMAC algorithms and use user-provided data from the JSON Web Signature protected header or payload in HMAC secret lookup routines, which can allow attackers to bypass signature verification. This issue has been patched in versions 3.2.3 and 4.0.1.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-347"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/auth0/node-jws",
+            "https://github.com/auth0/node-jws/commit/34c45b2c04434f925b638de6a061de9339c0ea2e",
+            "https://github.com/auth0/node-jws/commit/4f6e73f24df42f07d632dec6431ade8eda8d11a6",
+            "https://github.com/auth0/node-jws/releases/tag/v3.2.3",
+            "https://github.com/auth0/node-jws/releases/tag/v4.0.1",
+            "https://github.com/auth0/node-jws/security/advisories/GHSA-869p-cjfg-cm3x",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-65945"
+          ],
+          "PublishedDate": "2025-12-04T19:16:05.55Z",
+          "LastModifiedDate": "2025-12-04T19:16:05.55Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-12816",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "8578eaac40e029b8"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-12816",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "An interpretation-conflict (CWE-436) vulnerability in node-forge versi ...",
+          "Description": "An interpretation-conflict (CWE-436) vulnerability in node-forge versions 1.3.1 and earlier enables unauthenticated attackers to craft ASN.1 structures to desynchronize schema validations, yielding a semantic divergence that may bypass downstream cryptographic verifications and security decisions.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-436"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:H/A:N",
+              "V3Score": 8.6
+            }
+          },
+          "References": [
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/asn1.js#L1153",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/ed25519.js#L81",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pbe.js#L363",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pkcs12.js#L328",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/pkcs7.js#L90",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/rsa.js#L1167",
+            "https://github.com/digitalbazaar/forge/blob/2bb97afb5058285ef09bcf1d04d6bd6b87cffd58/lib/x509.js#L667",
+            "https://github.com/digitalbazaar/forge/pull/1124",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-5gfm-wpxj-wjgq",
+            "https://kb.cert.org/vuls/id/521113",
+            "https://www.kb.cert.org/vuls/id/521113",
+            "https://www.npmjs.com/package/node-forge"
+          ],
+          "PublishedDate": "2025-11-25T20:15:58.87Z",
+          "LastModifiedDate": "2025-11-25T22:16:16.69Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-66031",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "8578eaac40e029b8"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-66031",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "node-forge: node-forge ASN.1 Unbounded Recursion",
+          "Description": "Forge (also called `node-forge`) is a native implementation of Transport Layer Security in JavaScript. An Uncontrolled Recursion vulnerability in node-forge versions 1.3.1 and below enables remote, unauthenticated attackers to craft deep ASN.1 structures that trigger unbounded recursive parsing. This leads to a Denial-of-Service (DoS) via stack exhaustion when parsing untrusted DER inputs. This issue has been patched in version 1.3.2.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-674"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-66031",
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/commit/260425c6167a38aae038697132483b5517b26451",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-554w-wpv2-vw27",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-66031",
+            "https://www.cve.org/CVERecord?id=CVE-2025-66031"
+          ],
+          "PublishedDate": "2025-11-26T23:15:49.397Z",
+          "LastModifiedDate": "2025-12-01T15:39:33.11Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-66030",
+          "PkgID": "node-forge@1.3.1",
+          "PkgName": "node-forge",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/node-forge@1.3.1",
+            "UID": "8578eaac40e029b8"
+          },
+          "InstalledVersion": "1.3.1",
+          "FixedVersion": "1.3.2",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-66030",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "Forge (also called `node-forge`) is a native implementation of Transpo ...",
+          "Description": "Forge (also called `node-forge`) is a native implementation of Transport Layer Security in JavaScript. An Integer Overflow vulnerability in node-forge versions 1.3.1 and below enables remote, unauthenticated attackers to craft ASN.1 structures containing OIDs with oversized arcs. These arcs may be decoded as smaller, trusted OIDs due to 32-bit bitwise truncation, enabling the bypass of downstream OID-based security decisions. This issue has been patched in version 1.3.2.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-190"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "References": [
+            "https://github.com/digitalbazaar/forge",
+            "https://github.com/digitalbazaar/forge/commit/3e0c35ace169cfca529a3e547a7848dc7bf57fdb",
+            "https://github.com/digitalbazaar/forge/security/advisories/GHSA-65ch-62r8-g69g",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-66030"
+          ],
+          "PublishedDate": "2025-11-26T23:15:49.237Z",
+          "LastModifiedDate": "2025-12-01T15:39:33.11Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-13033",
+          "PkgID": "nodemailer@6.10.1",
+          "PkgName": "nodemailer",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/nodemailer@6.10.1",
+            "UID": "e46114265c6ed207"
+          },
+          "InstalledVersion": "6.10.1",
+          "FixedVersion": "7.0.7",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-13033",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "nodemailer: Nodemailer: Email to an unintended domain can occur due to Interpretation Conflict",
+          "Description": "A vulnerability was identified in the email parsing library due to improper handling of specially formatted recipient email addresses. An attacker can exploit this flaw by crafting a recipient address that embeds an external address within quotes. This causes the application to misdirect the email to the attacker's external address instead of the intended internal recipient. This could lead to a significant data leak of sensitive information and allow an attacker to bypass security filters and access controls.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-436"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-13033",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2402179",
+            "https://github.com/nodemailer/nodemailer",
+            "https://github.com/nodemailer/nodemailer/commit/1150d99fba77280df2cfb1885c43df23109a8626",
+            "https://github.com/nodemailer/nodemailer/security/advisories/GHSA-mm7p-fcc7-pg87",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-13033",
+            "https://www.cve.org/CVERecord?id=CVE-2025-13033"
+          ],
+          "PublishedDate": "2025-11-14T20:15:45.957Z",
+          "LastModifiedDate": "2025-11-18T14:06:55.963Z"
+        },
+        {
+          "VulnerabilityID": "GHSA-rcmh-qjqh-p98v",
+          "PkgID": "nodemailer@6.10.1",
+          "PkgName": "nodemailer",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/nodemailer@6.10.1",
+            "UID": "e46114265c6ed207"
+          },
+          "InstalledVersion": "6.10.1",
+          "FixedVersion": "7.0.11",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://github.com/advisories/GHSA-rcmh-qjqh-p98v",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "Nodemailer’s addressparser is vulnerable to DoS caused by recursive calls",
+          "Description": "### Summary\nA DoS can occur that immediately halts the system due to the use of an unsafe function.\n\n### Details\nAccording to **RFC 5322**, nested group structures (a group inside another group) are not allowed. Therefore, in lib/addressparser/index.js, the email address parser performs flattening when nested groups appear, since such input is likely to be abnormal. (If the address is valid, it is added as-is.) In other words, the parser flattens all nested groups and inserts them into the final group list.\nHowever, the code implemented for this flattening process can be exploited by malicious input and triggers DoS\n\nRFC 5322 uses a colon (:) to define a group, and commas (,) are used to separate members within a group.\nAt the following location in lib/addressparser/index.js:\n\nhttps://github.com/nodemailer/nodemailer/blob/master/lib/addressparser/index.js#L90\n\nthere is code that performs this flattening. The issue occurs when the email address parser attempts to process the following kind of malicious address header:\n\n```g0: g1: g2: g3: ... gN: victim@example.com;```\n\nBecause no recursion depth limit is enforced, the parser repeatedly invokes itself in the pattern\n`addressparser → _handleAddress → addressparser → ...`\nfor each nested group. As a result, when an attacker sends a header containing many colons, Nodemailer enters infinite recursion, eventually throwing Maximum call stack size exceeded and causing the process to terminate immediately. Due to the structure of this behavior, no authentication is required, and a single request is enough to shut down the service.\n\nThe problematic code section is as follows:\n```js\nif (isGroup) {\n    ...\n    if (data.group.length) {\n        let parsedGroup = addressparser(data.group.join(',')); // \u003c- boom!\n        parsedGroup.forEach(member =\u003e {\n            if (member.group) {\n                groupMembers = groupMembers.concat(member.group);\n            } else {\n                groupMembers.push(member);\n            }\n        });\n    }\n}\n```\n`data.group` is expected to contain members separated by commas, but in the attacker’s payload the group contains colon `(:)` tokens. Because of this, the parser repeatedly triggers recursive calls for each colon, proportional to their number.\n\n### PoC\n\n```\nconst nodemailer = require('nodemailer');\n\nfunction buildDeepGroup(depth) {\n  let parts = [];\n  for (let i = 0; i \u003c depth; i++) {\n    parts.push(`g${i}:`);\n  }\n  return parts.join(' ') + ' user@example.com;';\n}\n\nconst DEPTH = 3000; // \u003c- control depth \nconst toHeader = buildDeepGroup(DEPTH);\nconsole.log('to header length:', toHeader.length);\n\nconst transporter = nodemailer.createTransport({\n  streamTransport: true,\n  buffer: true,\n  newline: 'unix'\n});\n\nconsole.log('parsing start');\n\ntransporter.sendMail(\n  {\n    from: 'test@example.com',\n    to: toHeader,\n    subject: 'test',\n    text: 'test'\n  },\n  (err, info) =\u003e {\n    if (err) {\n      console.error('error:', err);\n    } else {\n      console.log('finished :', info \u0026\u0026 info.envelope);\n    }\n  }\n);\n```\nAs a result, when the colon is repeated beyond a certain threshold, the Node.js process terminates immediately.\n\n### Impact\nThe attacker can achieve the following:\n\n1. Force an immediate crash of any server/service that uses Nodemailer\n2. Kill the backend process with a single web request\n3. In environments using PM2/Forever, trigger a continuous restart loop, causing severe resource exhaustion”",
+          "Severity": "LOW",
+          "VendorSeverity": {
+            "ghsa": 1
+          },
+          "References": [
+            "https://github.com/nodemailer/nodemailer",
+            "https://github.com/nodemailer/nodemailer/commit/b61b9c0cfd682b6f647754ca338373b68336a150",
+            "https://github.com/nodemailer/nodemailer/security/advisories/GHSA-rcmh-qjqh-p98v"
+          ],
+          "PublishedDate": "2025-12-01T20:44:25Z",
+          "LastModifiedDate": "2025-12-01T20:44:25Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-12905",
+          "PkgID": "tar-fs@2.1.1",
+          "PkgName": "tar-fs",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/tar-fs@2.1.1",
+            "UID": "1e13e4f8aeec1561"
+          },
+          "InstalledVersion": "2.1.1",
+          "FixedVersion": "1.16.4, 2.1.2, 3.0.7",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-12905",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "tar-fs: link following and path traversal via maliciously crafted tar file",
+          "Description": "An Improper Link Resolution Before File Access (\"Link Following\") and Improper Limitation of a Pathname to a Restricted Directory (\"Path Traversal\"). This vulnerability occurs when extracting a maliciously crafted tar file, which can result in unauthorized file writes or overwrites outside the intended extraction directory. The issue is associated with index.js in the tar-fs package.\n\nThis issue affects tar-fs: from 0.0.0 before 1.16.4, from 2.0.0 before 2.1.2, from 3.0.0 before 3.0.8.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-22",
+            "CWE-59"
+          ],
+          "VendorSeverity": {
+            "cbl-mariner": 3,
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2024-12905",
+            "https://arxiv.org/abs/2506.04962",
+            "https://arxiv.org/pdf/2506.04962",
+            "https://github.com/mafintosh/tar-fs",
+            "https://github.com/mafintosh/tar-fs/commit/a1dd7e7c7f4b4a8bd2ab60f513baca573b44e2ed",
+            "https://lists.debian.org/debian-lts-announce/2025/06/msg00012.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2024-12905",
+            "https://www.cve.org/CVERecord?id=CVE-2024-12905",
+            "https://www.seal.security/blog/a-link-to-the-past-uncovering-a-new-vulnerability-in-tar-fs"
+          ],
+          "PublishedDate": "2025-03-27T17:15:53.25Z",
+          "LastModifiedDate": "2025-11-03T20:16:08.077Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-48387",
+          "PkgID": "tar-fs@2.1.1",
+          "PkgName": "tar-fs",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/tar-fs@2.1.1",
+            "UID": "1e13e4f8aeec1561"
+          },
+          "InstalledVersion": "2.1.1",
+          "FixedVersion": "1.16.5, 2.1.3, 3.0.9",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-48387",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "tar-fs: tar-fs has issue where extract can write outside the specified dir with a specific tarball",
+          "Description": "tar-fs provides filesystem bindings for tar-stream. Versions prior to 3.0.9, 2.1.3, and 1.16.5 have an issue where an extract can write outside the specified dir with a specific tarball. This has been patched in versions 3.0.9, 2.1.3, and 1.16.5. As a workaround, use the ignore option to ignore non files/directories.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-22"
+          ],
+          "VendorSeverity": {
+            "cbl-mariner": 3,
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:L",
+              "V3Score": 7.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-48387",
+            "https://github.com/google/security-research/security/advisories/GHSA-xrg4-qp5w-2c3w",
+            "https://github.com/mafintosh/tar-fs",
+            "https://github.com/mafintosh/tar-fs/commit/647447b572bc135c41035e82ca7b894f02b17f0f",
+            "https://github.com/mafintosh/tar-fs/security/advisories/GHSA-8cj5-5rvv-wf4v",
+            "https://lists.debian.org/debian-lts-announce/2025/06/msg00012.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-48387",
+            "https://www.cve.org/CVERecord?id=CVE-2025-48387"
+          ],
+          "PublishedDate": "2025-06-02T20:15:22.93Z",
+          "LastModifiedDate": "2025-11-03T20:19:06.267Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-59343",
+          "PkgID": "tar-fs@2.1.1",
+          "PkgName": "tar-fs",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/tar-fs@2.1.1",
+            "UID": "1e13e4f8aeec1561"
+          },
+          "InstalledVersion": "2.1.1",
+          "FixedVersion": "3.1.1, 2.1.4, 1.16.6",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-59343",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "tar-fs: tar-fs symlink validation bypass",
+          "Description": "tar-fs provides filesystem bindings for tar-stream. Versions prior to 3.1.1, 2.1.3, and 1.16.5 are vulnerable to symlink validation bypass if the destination directory is predictable with a specific tarball. This issue has been patched in version 3.1.1, 2.1.4, and 1.16.6. A workaround involves using the ignore option on non files/directories.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-22",
+            "CWE-61"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-59343",
+            "https://github.com/mafintosh/tar-fs",
+            "https://github.com/mafintosh/tar-fs/commit/0bd54cdf06da2b7b5b95cd4b062c9f4e0a8c4e09",
+            "https://github.com/mafintosh/tar-fs/security/advisories/GHSA-vj76-c3g6-qr5v",
+            "https://lists.debian.org/debian-lts-announce/2025/09/msg00028.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-59343",
+            "https://www.cve.org/CVERecord?id=CVE-2025-59343"
+          ],
+          "PublishedDate": "2025-09-24T18:15:42.297Z",
+          "LastModifiedDate": "2025-11-03T19:16:14.317Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-59343",
+          "PkgID": "tar-fs@2.1.3",
+          "PkgName": "tar-fs",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/tar-fs@2.1.3",
+            "UID": "d0f909c0b0cc8a0e"
+          },
+          "InstalledVersion": "2.1.3",
+          "FixedVersion": "3.1.1, 2.1.4, 1.16.6",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-59343",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "tar-fs: tar-fs symlink validation bypass",
+          "Description": "tar-fs provides filesystem bindings for tar-stream. Versions prior to 3.1.1, 2.1.3, and 1.16.5 are vulnerable to symlink validation bypass if the destination directory is predictable with a specific tarball. This issue has been patched in version 3.1.1, 2.1.4, and 1.16.6. A workaround involves using the ignore option on non files/directories.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-22",
+            "CWE-61"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-59343",
+            "https://github.com/mafintosh/tar-fs",
+            "https://github.com/mafintosh/tar-fs/commit/0bd54cdf06da2b7b5b95cd4b062c9f4e0a8c4e09",
+            "https://github.com/mafintosh/tar-fs/security/advisories/GHSA-vj76-c3g6-qr5v",
+            "https://lists.debian.org/debian-lts-announce/2025/09/msg00028.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-59343",
+            "https://www.cve.org/CVERecord?id=CVE-2025-59343"
+          ],
+          "PublishedDate": "2025-09-24T18:15:42.297Z",
+          "LastModifiedDate": "2025-11-03T19:16:14.317Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-12758",
+          "PkgID": "validator@13.12.0",
+          "PkgName": "validator",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/validator@13.12.0",
+            "UID": "e9281fdfe777c9af"
+          },
+          "InstalledVersion": "13.12.0",
+          "FixedVersion": "13.15.22",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-12758",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "Validator is Vulnerable to Incomplete Filtering of One or More Instances of Special Elements",
+          "Description": "Versions of the package validator before 13.15.22 are vulnerable to Incomplete Filtering of One or More Instances of Special Elements in the isLength() function that does not take into account Unicode variation selectors (\\uFE0F, \\uFE0E) appearing in a sequence which lead to improper string length calculation. This can lead to an application using isLength for input validation accepting strings significantly longer than intended, resulting in issues like data truncation in databases, buffer overflows in other system components, or denial-of-service.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-792",
+            "CWE-172"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://gist.github.com/koral--/ad31208b25b9e3d1e2e35f1d4d72572e",
+            "https://github.com/validatorjs/validator.js",
+            "https://github.com/validatorjs/validator.js/commit/d457ecaf55b0f3d8bd379d82757425d0d13dd382",
+            "https://github.com/validatorjs/validator.js/pull/2616",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-12758",
+            "https://security.snyk.io/vuln/SNYK-JS-VALIDATOR-13653476"
+          ],
+          "PublishedDate": "2025-11-27T05:16:12.193Z",
+          "LastModifiedDate": "2025-12-03T17:15:49.477Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-56200",
+          "PkgID": "validator@13.12.0",
+          "PkgName": "validator",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/validator@13.12.0",
+            "UID": "e9281fdfe777c9af"
+          },
+          "InstalledVersion": "13.12.0",
+          "FixedVersion": "13.15.20",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-56200",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "validator.js has a URL validation bypass vulnerability in its isURL function",
+          "Description": "A URL validation bypass vulnerability exists in validator.js through version 13.15.15. The isURL() function uses '://' as a delimiter to parse protocols, while browsers use ':' as the delimiter. This parsing difference allows attackers to bypass protocol and domain validation by crafting URLs leading to XSS and Open Redirect attacks.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-79"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            }
+          },
+          "References": [
+            "http://validatorjs.com",
+            "https://gist.github.com/junan-98/27ae092aa40e2a057d41a0f95148f666",
+            "https://gist.github.com/junan-98/a93130505b258b9e4ec9f393e7533596",
+            "https://github.com/validatorjs/validator.js",
+            "https://github.com/validatorjs/validator.js/commit/cbef5088f02d36caf978f378bb845fe49bdc0809",
+            "https://github.com/validatorjs/validator.js/issues/2600",
+            "https://github.com/validatorjs/validator.js/pull/2608",
+            "https://github.com/validatorjs/validator.js/releases/tag/13.15.20",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-56200"
+          ],
+          "PublishedDate": "2025-09-30T18:15:50.307Z",
+          "LastModifiedDate": "2025-10-18T01:48:26.373Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-37890",
+          "PkgID": "ws@8.9.0",
+          "PkgName": "ws",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/ws@8.9.0",
+            "UID": "e728a3af95f3cd7e"
+          },
+          "InstalledVersion": "8.9.0",
+          "FixedVersion": "5.2.4, 6.2.3, 7.5.10, 8.17.1",
+          "Status": "fixed",
+          "Layer": {},
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-37890",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Title": "nodejs-ws: denial of service when handling a request with many HTTP headers",
+          "Description": "ws is an open source WebSocket client and server for Node.js. A request with a number of headers exceeding theserver.maxHeadersCount threshold could be used to crash a ws server. The vulnerability was fixed in ws@8.17.1 (e55e510) and backported to ws@7.5.10 (22c2876), ws@6.2.3 (eeb76d3), and ws@5.2.4 (4abd8f6). In vulnerable versions of ws, the issue can be mitigated in the following ways: 1. Reduce the maximum allowed length of the request headers using the --max-http-header-size=size and/or the maxHeaderSize options so that no more headers than the server.maxHeadersCount limit can be sent. 2. Set server.maxHeadersCount to 0 so that no limit is applied.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-476"
+          ],
+          "VendorSeverity": {
+            "cbl-mariner": 3,
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2024-37890",
+            "https://github.com/websockets/ws",
+            "https://github.com/websockets/ws/commit/22c28763234aa75a7e1b76f5c01c181260d7917f",
+            "https://github.com/websockets/ws/commit/4abd8f6de4b0b65ef80b3ff081989479ed93377e",
+            "https://github.com/websockets/ws/commit/e55e5106f10fcbaac37cfa89759e4cc0d073a52c",
+            "https://github.com/websockets/ws/commit/eeb76d313e2a00dd5247ca3597bba7877d064a63",
+            "https://github.com/websockets/ws/issues/2230",
+            "https://github.com/websockets/ws/pull/2231",
+            "https://github.com/websockets/ws/security/advisories/GHSA-3h5v-q93c-6h6q",
+            "https://nodejs.org/api/http.html#servermaxheaderscount",
+            "https://nvd.nist.gov/vuln/detail/CVE-2024-37890",
+            "https://www.cve.org/CVERecord?id=CVE-2024-37890"
+          ],
+          "PublishedDate": "2024-06-17T20:15:13.203Z",
+          "LastModifiedDate": "2024-11-21T09:24:28.81Z"
+        }
+      ]
+    }
+  ]
+}

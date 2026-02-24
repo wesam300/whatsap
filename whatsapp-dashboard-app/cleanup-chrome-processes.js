@@ -1,5 +1,5 @@
 // ========================================
-// سكريبت تنظيف عمليات Chrome المتبقية (أوبونتو/لينكس فقط)
+// سكريبت تنظيف عمليات Chrome المتبقية
 // ========================================
 // هذا السكريبت يغلق جميع عمليات Chrome/Chromium المتبقية للجلسات المنتهية
 
@@ -9,11 +9,6 @@ const db = require('./db');
 const path = require('path');
 
 const execAsync = promisify(exec);
-
-if (process.platform !== 'linux' && process.platform !== 'darwin') {
-    console.error('هذا السكريبت مخصّص لأوبونتو/لينكس فقط.');
-    process.exit(1);
-}
 
 console.log('🧹 بدء تنظيف عمليات Chrome المتبقية...\n');
 
@@ -32,7 +27,68 @@ async function getActiveSessions() {
     }
 }
 
-// إغلاق عمليات Chrome في أوبونتو/لينكس/ماك
+// إغلاق عمليات Chrome في Windows
+async function killChromeProcessesWindows() {
+    try {
+        console.log('🔍 البحث عن عمليات Chrome في Windows...');
+        
+        // البحث عن عمليات chrome.exe
+        const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq chrome.exe" /FO CSV');
+        const lines = stdout.split('\n').filter(line => 
+            line.includes('chrome.exe') && 
+            !line.includes('PID') &&
+            line.trim()
+        );
+        
+        if (lines.length === 0) {
+            console.log('✅ لا توجد عمليات Chrome نشطة');
+            return;
+        }
+        
+        console.log(`📊 تم العثور على ${lines.length} عملية Chrome`);
+        
+        // استخراج PIDs
+        const pids = [];
+        for (const line of lines) {
+            const parts = line.split('","');
+            if (parts.length > 1) {
+                const pid = parts[1].replace(/"/g, '').trim();
+                if (pid && !isNaN(pid)) {
+                    pids.push(pid);
+                }
+            }
+        }
+        
+        if (pids.length === 0) {
+            console.log('⚠️ لم يتم العثور على PIDs صحيحة');
+            return;
+        }
+        
+        console.log(`🔧 إغلاق ${pids.length} عملية Chrome...`);
+        
+        // إغلاق كل عملية
+        for (const pid of pids) {
+            try {
+                await execAsync(`taskkill /F /T /PID ${pid}`);
+                console.log(`   ✅ تم إغلاق العملية ${pid}`);
+            } catch (error) {
+                // تجاهل الأخطاء (قد تكون العملية انتهت بالفعل)
+                console.log(`   ⚠️ لم يتم إغلاق العملية ${pid} (قد تكون انتهت بالفعل)`);
+            }
+        }
+        
+        console.log('✅ تم إغلاق جميع عمليات Chrome');
+        
+    } catch (error) {
+        if (error.message.includes('not found') || error.message.includes('لا توجد')) {
+            console.log('✅ لا توجد عمليات Chrome نشطة');
+        } else {
+            console.error('❌ خطأ في إغلاق عمليات Chrome:', error.message);
+        }
+    }
+}
+
+// إغلاق عمليات Chrome في Linux/Mac
 async function killChromeProcessesUnix() {
     try {
         console.log('🔍 البحث عن عمليات Chrome في Linux/Mac...');
@@ -142,7 +198,12 @@ async function main() {
             console.log(`   IDs: ${activeSessions.join(', ')}`);
         }
         
-        await killChromeProcessesUnix();
+        // إغلاق عمليات Chrome حسب نظام التشغيل
+        if (process.platform === 'win32') {
+            await killChromeProcessesWindows();
+        } else {
+            await killChromeProcessesUnix();
+        }
         
         console.log('\n✅ اكتمل التنظيف بنجاح!');
         console.log('\n💡 نصيحة: يمكنك تشغيل هذا السكريبت بشكل دوري أو إضافته إلى cron job');

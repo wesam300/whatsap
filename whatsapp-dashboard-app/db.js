@@ -70,8 +70,8 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token ON email_verification_tokens(token);
 `);
 
-// إنشاء جدول مفاتيح API للمستخدمين
-db.prepare(`
+    // إنشاء جدول مفاتيح API للمستخدمين
+    db.prepare(`
         CREATE TABLE IF NOT EXISTS api_keys (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -84,8 +84,8 @@ db.prepare(`
         )
     `).run();
 
-// إنشاء جدول توكنات الجلسات
-db.prepare(`
+    // إنشاء جدول توكنات الجلسات
+    db.prepare(`
         CREATE TABLE IF NOT EXISTS session_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -98,8 +98,8 @@ db.prepare(`
         )
     `).run();
 
-// إنشاء جدول سجلات API
-db.prepare(`
+    // إنشاء جدول سجلات API
+    db.prepare(`
         CREATE TABLE IF NOT EXISTS api_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -118,8 +118,8 @@ db.prepare(`
         )
     `).run();
 
-// إنشاء جدول الرسائل
-db.prepare(`
+    // إنشاء جدول الرسائل
+    db.prepare(`
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
@@ -137,71 +137,71 @@ db.prepare(`
         )
     `).run();
 
-// إضافة الأعمدة المفقودة للقاعدة الموجودة (Migration)
-try {
-    // إضافة أعمدة المستخدمين المفقودة
-    db.prepare('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE').run();
-} catch (e) { /* Column already exists */ }
+    // إضافة الأعمدة المفقودة للقاعدة الموجودة (Migration)
+    try {
+        // إضافة أعمدة المستخدمين المفقودة
+        db.prepare('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 5').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE users ADD COLUMN session_ttl_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة عمود انتهاء الصلاحية للجلسات
+        db.prepare('ALTER TABLE sessions ADD COLUMN expires_at DATETIME').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة أعمدة الإعدادات العامة
+        db.prepare('ALTER TABLE settings ADD COLUMN default_max_sessions INTEGER DEFAULT 5').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE settings ADD COLUMN default_session_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة أعمدة التحكم في الجلسات
+        db.prepare('ALTER TABLE sessions ADD COLUMN max_days INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN days_remaining INTEGER DEFAULT 30').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN is_paused BOOLEAN DEFAULT FALSE').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        db.prepare('ALTER TABLE sessions ADD COLUMN pause_reason TEXT').run();
+    } catch (e) { /* Column already exists */ }
+    
+    try {
+        // إضافة عمود timestamp للQR code
+        db.prepare('ALTER TABLE sessions ADD COLUMN qr_timestamp DATETIME').run();
+    } catch (e) { /* Column already exists */ }
 
-try {
-    db.prepare('ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 5').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE users ADD COLUMN session_ttl_days INTEGER DEFAULT 30').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    // إضافة عمود انتهاء الصلاحية للجلسات
-    db.prepare('ALTER TABLE sessions ADD COLUMN expires_at DATETIME').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    // إضافة أعمدة الإعدادات العامة
-    db.prepare('ALTER TABLE settings ADD COLUMN default_max_sessions INTEGER DEFAULT 5').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE settings ADD COLUMN default_session_days INTEGER DEFAULT 30').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    // إضافة أعمدة التحكم في الجلسات
-    db.prepare('ALTER TABLE sessions ADD COLUMN max_days INTEGER DEFAULT 30').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE sessions ADD COLUMN days_remaining INTEGER DEFAULT 30').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE sessions ADD COLUMN is_paused BOOLEAN DEFAULT FALSE').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    db.prepare('ALTER TABLE sessions ADD COLUMN pause_reason TEXT').run();
-} catch (e) { /* Column already exists */ }
-
-try {
-    // إضافة عمود timestamp للQR code
-    db.prepare('ALTER TABLE sessions ADD COLUMN qr_timestamp DATETIME').run();
-} catch (e) { /* Column already exists */ }
-
-// إنشاء فهارس للبحث السريع
-db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_api_key ON api_keys(api_key)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_session_tokens_user_id ON session_tokens(user_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_session_tokens_token ON session_tokens(token)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_api_logs_user_id ON api_logs(user_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)').run();
-db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)').run();
+    // إنشاء فهارس للبحث السريع
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_api_key ON api_keys(api_key)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_session_tokens_user_id ON session_tokens(user_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_session_tokens_token ON session_tokens(token)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_api_logs_user_id ON api_logs(user_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)').run();
 
 // إنشاء جدول الباقات
 db.prepare(`
@@ -248,21 +248,6 @@ db.prepare(`
         terms_conditions TEXT,
         privacy_policy TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-`).run();
-
-// إنشاء جدول قوالب التقارير
-db.prepare(`
-    CREATE TABLE IF NOT EXISTS report_templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        content TEXT NOT NULL, -- HTML template
-        parameters TEXT, -- JSON array of parameter names
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     )
 `).run();
 
@@ -325,7 +310,7 @@ try {
     if (settingsCount.c === 0) {
         db.prepare(`
             INSERT INTO system_settings (id, admin_phone, admin_email, support_whatsapp, company_name, company_address)
-            VALUES (1, '+967772000992', 'admin@example.com', '+967772000992', 'شركة التطوير', 'الرياض، المملكة العربية السعودية')
+            VALUES (1, '+966501234567', 'admin@example.com', '+966501234567', 'شركة التطوير', 'الرياض، المملكة العربية السعودية')
         `).run();
     }
 } catch (e) {
@@ -333,15 +318,15 @@ try {
 }
 
 module.exports = db;
-
+ 
 // =============================
 // Admin/Policies migrations (best-effort)
 // =============================
-try { db.prepare("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE").run(); } catch (e) { }
-try { db.prepare("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE").run(); } catch (e) { }
-try { db.prepare("ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 1").run(); } catch (e) { }
-try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_hours INTEGER").run(); } catch (e) { }
-try { db.prepare("ALTER TABLE sessions ADD COLUMN expires_at DATETIME").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN max_sessions INTEGER DEFAULT 1").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_hours INTEGER").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE sessions ADD COLUMN expires_at DATETIME").run(); } catch (e) {}
 // إضافة عمود expires_at إذا لم يكن موجوداً
 try {
     const columns = db.prepare("PRAGMA table_info(sessions)").all();
@@ -355,8 +340,8 @@ try {
 }
 
 // Switch TTL to days instead of hours
-try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_days INTEGER").run(); } catch (e) { }
-try { db.prepare('UPDATE users SET session_ttl_days = 5 WHERE session_ttl_days IS NULL').run(); } catch (e) { }
+try { db.prepare("ALTER TABLE users ADD COLUMN session_ttl_days INTEGER").run(); } catch (e) {}
+try { db.prepare('UPDATE users SET session_ttl_days = 5 WHERE session_ttl_days IS NULL').run(); } catch (e) {}
 
 // Settings table for commercial config
 try {
@@ -376,9 +361,9 @@ try {
             { id: 'business', name: 'باقة الأعمال', price: 99, currency: 'USD', durationDays: 30, features: ['حتى 10 جلسات', 'تقارير متقدمة', 'دعم على مدار الساعة'] }
         ];
         db.prepare('INSERT INTO settings (id, admin_phone, packages_json) VALUES (1, ?, ?)')
-            .run('+7 993 070-65-16', JSON.stringify(defaultPackages));
+          .run('+7 993 070-65-16', JSON.stringify(defaultPackages));
     }
-} catch (e) { }
+} catch (e) {}
 
 // Seed admin if not exists (dev convenience)
 try {
@@ -391,8 +376,8 @@ try {
             const bcrypt = require('bcrypt');
             const hash = bcrypt.hashSync('reem123', 10);
             db.prepare('INSERT INTO users (username, email, password_hash, is_admin, is_active, max_sessions, session_ttl_hours) VALUES (?, ?, ?, TRUE, TRUE, 3, 720)')
-                .run('reem', 'reem@example.com', hash);
-            try { console.log('Admin user created: username=reem, password=reem123'); } catch (_) { }
+              .run('reem', 'reem@example.com', hash);
+            try { console.log('Admin user created: username=reem, password=reem123'); } catch (_) {}
         }
     }
-} catch (e) { }
+} catch (e) {}

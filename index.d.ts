@@ -113,15 +113,9 @@ declare namespace WAWebJS {
 
         /** Get all current Labels  */
         getLabels(): Promise<Label[]>
-
+        
         /** Get all current Broadcasts  */
         getBroadcasts(): Promise<Broadcast[]>
-
-        /** Get broadcast instance by current user ID */
-        getBroadcastById(contactId: string): Promise<Broadcast>
-
-        /** Revoke current own status messages */
-        revokeStatusMessage(messageId: string): Promise<void>
         
         /** Change labels in chats  */
         addOrRemoveLabels(labelIds: Array<number|string>, chatIds: Array<string>): Promise<void>
@@ -248,26 +242,7 @@ declare namespace WAWebJS {
         syncHistory(chatId: string): Promise<boolean>
 
         /** Save new contact to user's addressbook or edit the existing one */
-        saveOrEditAddressbookContact(phoneNumber: string, firstName: string, lastName: string, syncToAddressbook?: boolean): Promise<void>
-
-        /**
-         * Add or edit a customer note
-         * @see https://faq.whatsapp.com/1433099287594476
-         */
-        addOrEditCustomerNote(userId: string, note: string): Promise<void>
-
-        /**
-         * Get a customer note
-         * @see https://faq.whatsapp.com/1433099287594476
-         */
-        getCustomerNote(userId: string): Promise<{
-            chatId: string;
-            content: string;
-            createdAt: number;
-            id: string;
-            modifiedAt: number;
-            type: string;
-        }>
+        saveOrEditAddressbookContact(phoneNumber: string, firstName: string, lastName: string, syncToAddressbook?: boolean): Promise<ChatId>
 
         /** Deletes the contact from user's addressbook */
         deleteAddressbookContact(honeNumber: string): Promise<void>
@@ -312,9 +287,6 @@ declare namespace WAWebJS {
          */
         transferChannelOwnership(channelId: string, newOwnerId: string, options?: TransferChannelOwnershipOptions): Promise<boolean>;
 
-        /** Get Poll Votes */
-        getPollVotes(messageId: string): Promise<PollVote[]>
-
         /** Generic event */
         on(event: string, listener: (...args: any) => void): this
 
@@ -323,6 +295,10 @@ declare namespace WAWebJS {
 
         /** Emitted when authentication is successful */
         on(event: 'authenticated', listener: (
+            /** 
+             * Object containing session information, when using LegacySessionAuth. Can be used to restore the session
+             */
+            session?: ClientSession
         ) => void): this
 
         /** 
@@ -558,12 +534,9 @@ declare namespace WAWebJS {
         /** Timeout for authentication selector in puppeteer
          * @default 0 */
         authTimeoutMs?: number,
-        /** function to be evaluated On New Document
-         * @default undefined */
-        evalOnNewDoc?: Function,
         /** Puppeteer launch options. View docs here: https://github.com/puppeteer/puppeteer/ */
         puppeteer?: puppeteer.PuppeteerNodeLaunchOptions & puppeteer.ConnectOptions
-		/** Determines how to save and restore sessions. Otherwise, NoAuth will be used. */
+		/** Determines how to save and restore sessions. Will use LegacySessionAuth if options.session is set. Otherwise, NoAuth will be used. */
         authStrategy?: AuthStrategy,
         /** The version of WhatsApp Web to use. Use options.webVersionCache to configure how the version is retrieved. */
         webVersion?: string,
@@ -571,7 +544,15 @@ declare namespace WAWebJS {
         webVersionCache?: WebCacheOptions,
         /** How many times should the qrcode be refreshed before giving up
 		 * @default 0 (disabled) */
-		qrMaxRetries?: number
+		qrMaxRetries?: number,
+        /** 
+         * @deprecated This option should be set directly on the LegacySessionAuth
+         */
+        restartOnAuthFail?: boolean
+        /** 
+         * @deprecated Only here for backwards-compatibility. You should move to using LocalAuth, or set the authStrategy to LegacySessionAuth explicitly.  
+         */
+        session?: ClientSession
         /** If another whatsapp web session is detected (another browser), take over the session in the current browser
          * @default false */
         takeoverOnConflict?: boolean,
@@ -686,6 +667,17 @@ declare namespace WAWebJS {
         delete: (options: { session: string }) => Promise<any> | any,
         save: (options: { session: string }) => Promise<any> | any,
         extract: (options: { session: string, path: string }) => Promise<any> | any,
+    }
+
+    /**
+     * Legacy session auth strategy
+     * Not compatible with multi-device accounts.
+     */
+     export class LegacySessionAuth extends AuthStrategy {
+        constructor(options?: {
+            session?: ClientSession,
+            restartOnAuthFail?: boolean,
+        })
     }
 
     /** 
@@ -853,8 +845,6 @@ declare namespace WAWebJS {
         AUTHENTICATED = 'authenticated',
         AUTHENTICATION_FAILURE = 'auth_failure',
         READY = 'ready',
-        CHAT_REMOVED = 'chat_removed',
-        CHAT_ARCHIVED = 'chat_archived',
         MESSAGE_RECEIVED = 'message',
         MESSAGE_CIPHERTEXT = 'message_ciphertext',
         MESSAGE_CREATE = 'message_create',
@@ -862,8 +852,6 @@ declare namespace WAWebJS {
         MESSAGE_REVOKED_ME = 'message_revoke_me',
         MESSAGE_ACK = 'message_ack',
         MESSAGE_EDIT = 'message_edit',
-        UNREAD_COUNT = 'unread_count',
-        MESSAGE_REACTION = 'message_reaction',
         MEDIA_UPLOADED = 'media_uploaded',
         CONTACT_CHANGED = 'contact_changed',
         GROUP_JOIN = 'group_join',
@@ -872,15 +860,12 @@ declare namespace WAWebJS {
         GROUP_MEMBERSHIP_REQUEST = 'group_membership_request',
         GROUP_UPDATE = 'group_update',
         QR_RECEIVED = 'qr',
-        CODE_RECEIVED = 'code',
         LOADING_SCREEN = 'loading_screen',
-        CALL = 'call',
         DISCONNECTED = 'disconnected',
         STATE_CHANGED = 'change_state',
         BATTERY_CHANGED = 'change_battery',
         REMOTE_SESSION_SAVED = 'remote_session_saved',
-        INCOMING_CALL = 'call',
-        VOTE_UPDATE = 'vote_update',
+        CALL = 'call'
     }
 
     /** Group notification types */
@@ -889,8 +874,6 @@ declare namespace WAWebJS {
         INVITE = 'invite',
         REMOVE = 'remove',
         LEAVE = 'leave',
-        PROMOTE = 'promote',
-        DEMOTE = 'demote',
         SUBJECT = 'subject',
         DESCRIPTION = 'description',
         PICTURE = 'picture',
@@ -914,7 +897,6 @@ declare namespace WAWebJS {
         AUDIO = 'audio',
         VOICE = 'ptt',
         IMAGE = 'image',
-        ALBUM = 'album',
         VIDEO = 'video',
         DOCUMENT = 'document',
         STICKER = 'sticker',
@@ -1192,10 +1174,6 @@ declare namespace WAWebJS {
          */
         getPayment: () => Promise<Payment>,
         /**
-         * Get Poll Votes associated with the given message
-         */
-        getPollVotes: () => Promise<PollVote[]>,
-        /**
          * Gets the reactions associated with the given message
          */
         getReactions: () => Promise<ReactionList[]>,
@@ -1206,10 +1184,6 @@ declare namespace WAWebJS {
          * Once the event is canceled, it can not be edited.
          */
         editScheduledEvent: (editedEventObject: Event) => Promise<Message | null>,
-        /**
-         * Send votes to the poll message
-         */
-        vote: (selectedOptions: Array<string>) => Promise<void>,
     }
 
     /** ID that represents a message */
@@ -1273,7 +1247,7 @@ declare namespace WAWebJS {
         endTime?: Date,
         /** The location of the event */
         location?: string,
-        /** The type of a WhatsApp call link to generate, valid values are: `video` | `voice` | `none` */
+        /** The type of a WhatsApp call link to generate, valid values are: `video` | `voice` */
         callType?: string,
         /**
          * Indicates if a scheduled event should be sent as an already canceled
@@ -1300,7 +1274,7 @@ declare namespace WAWebJS {
             messageSecret?: string;
         };
 
-        constructor(name: string, startTime: Date, options?: ScheduledEventSendOptions)
+        constructor(name: string, startTime: Date, options?: EventSendOptions)
     }
 
     /** Represents a Poll Vote on WhatsApp */
@@ -1560,8 +1534,6 @@ declare namespace WAWebJS {
         /** Gets the Contact's common groups with you. Returns empty array if you don't have any common group. */
         getCommonGroups: () => Promise<ChatId[]>
 
-        /** Gets the Contact's current status broadcast. */
-        getBroadcast: () => Promise<Broadcast>
     }
 
     export interface ContactId {
@@ -1694,8 +1666,6 @@ declare namespace WAWebJS {
         lastMessage: Message,
         /** Indicates if the Chat is pinned */
         pinned: boolean,
-        /** Indicates if the Chat is locked */
-        isLocked: boolean,
 
         /** Archives this chat */
         archive: () => Promise<void>,
@@ -1737,17 +1707,6 @@ declare namespace WAWebJS {
         getPinnedMessages: () => Promise<[Message]|[]>
         /** Sync history conversation of the Chat */
         syncHistory: () => Promise<boolean>
-        /** Add or edit a customer note */
-        addOrEditCustomerNote: (note: string) => Promise<void>
-        /** Get a customer note */
-        getCustomerNote: () => Promise<{
-            chatId: string;
-            content: string;
-            createdAt: number;
-            id: string;
-            modifiedAt: number;
-            type: string;
-        }>
     }
 
     export interface Channel {

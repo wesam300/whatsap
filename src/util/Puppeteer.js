@@ -4,9 +4,9 @@
  * NOTE:
  * Rewrite it to 'upsertFunction' after updating Puppeteer to 20.6 or higher
  * using page.removeExposedFunction
- * https://pptr.dev/api/puppeteer.page.removeexposedfunction
+ * https://pptr.dev/api/puppeteer.page.removeExposedFunction
  *
- * @param {object} page - Puppeteer Page instance
+ * @param {import(puppeteer).Page} page
  * @param {string} name
  * @param {Function} fn
  */

@@ -64,12 +64,6 @@ class Chat extends Base {
         this.pinned = !!data.pin;
 
         /**
-         * Indicates if the Chat is locked
-         * @type {boolean}
-         */
-        this.isLocked = data.isLocked;
-
-        /**
          * Indicates if the chat is muted or not
          * @type {boolean}
          */
@@ -212,7 +206,7 @@ class Chat extends Base {
 
             if (searchOptions && searchOptions.limit > 0) {
                 while (msgs.length < searchOptions.limit) {
-                    const loadedMessages = await window.Store.ConversationMsgs.loadEarlierMsgs(chat,chat.msgs);
+                    const loadedMessages = await window.Store.ConversationMsgs.loadEarlierMsgs(chat);
                     if (!loadedMessages || !loadedMessages.length) break;
                     msgs = [...loadedMessages.filter(msgFilter), ...msgs];
                 }
@@ -287,7 +281,7 @@ class Chat extends Base {
 
     /**
      * Gets instances of all pinned messages in a chat
-     * @returns {Promise<Array<Message>>}
+     * @returns {Promise<[Message]|[]>}
      */
     async getPinnedMessages() {
         return this.client.getPinnedMessages(this.id._serialized);
@@ -299,36 +293,6 @@ class Chat extends Base {
      */
     async syncHistory() {
         return this.client.syncHistory(this.id._serialized);
-    }
-
-    /**
-     * Add or edit a customer note
-     * @see https://faq.whatsapp.com/1433099287594476
-     * @param {string} note The note to add
-     * @returns {Promise<void>}
-     */
-    async addOrEditCustomerNote(note) {
-        if (this.isGroup || this.isChannel) return;
-
-        return this.client.addOrEditCustomerNote(this.id._serialized, note);
-    }
-
-    /**
-     * Get a customer note
-     * @see https://faq.whatsapp.com/1433099287594476
-     * @returns {Promise<{
-     *    chatId: string,
-     *    content: string,
-     *    createdAt: number,
-     *    id: string,
-     *    modifiedAt: number,
-     *    type: string
-     * }>}
-     */
-    async getCustomerNote() {
-        if (this.isGroup || this.isChannel) return null;
-        
-        return this.client.getCustomerNote(this.id._serialized);
     }
 }
 
