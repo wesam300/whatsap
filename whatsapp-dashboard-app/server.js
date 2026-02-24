@@ -46,10 +46,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// ضروري عند تشغيل التطبيق خلف reverse proxy (nginx، إلخ) حتى يعمل rate limit و X-Forwarded-For بشكل صحيح
-// استخدام true لثقة كاملة بجميع الـ proxy hops (شائع مع nginx)
-app.set('trust proxy', true);
-
 // Middleware
 // CORS configuration (explicit to ensure headers on all responses including errors)
 const corsOptions = {
@@ -60,9 +56,6 @@ const corsOptions = {
     credentials: false,
 };
 
-// منع express-rate-limit من رمي خطأ عند وجود X-Forwarded-For (حتى لو trust proxy لم يُطبق لأي سبب)
-const rateLimitValidate = { validate: { xForwardedForHeader: false } };
-
 // Rate limiting configurations
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -70,7 +63,6 @@ const generalLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الطلبات، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    ...rateLimitValidate,
 });
 
 const apiLimiter = rateLimit({
@@ -79,7 +71,6 @@ const apiLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من طلبات API، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    ...rateLimitValidate,
 });
 
 const messageLimiter = rateLimit({
@@ -88,7 +79,6 @@ const messageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل في الدقيقة، يرجى المحاولة لاحقاً' },
     standardHeaders: true,
     legacyHeaders: false,
-    ...rateLimitValidate,
 });
 
 const dailyMessageLimiter = rateLimit({
@@ -97,7 +87,6 @@ const dailyMessageLimiter = rateLimit({
     message: { error: 'تم تجاوز الحد المسموح من الرسائل اليومية، يرجى المحاولة غداً' },
     standardHeaders: true,
     legacyHeaders: false,
-    ...rateLimitValidate,
 });
 
 
@@ -305,19 +294,6 @@ function getPuppeteerOptions() {
     };
 }
 
-/** خيارات عميل WhatsApp: مهلة مصادقة أطول وتكرار QR لتقليل auth timeout و ProtocolError على السيرفرات البطيئة */
-function getWhatsAppClientOptions(sessionId) {
-    return {
-        authStrategy: new LocalAuth({
-            clientId: `session_${sessionId}`,
-            dataPath: path.join(__dirname, 'sessions')
-        }),
-        puppeteer: getPuppeteerOptions(),
-        authTimeoutMs: 90000,   // 90 ثانية بدل الافتراضي (يقلل "auth timeout")
-        qrMaxRetries: 10,      // إعادة توليد QR عدة مرات قبل الاستسلام
-    };
-}
-
 // دالة مساعدة لإغلاق الجلسة بشكل كامل مع إغلاق عملية Chrome
 async function destroyClientCompletely(sessionId, client) {
     // إلغاء أي محاولات إعادة اتصال
@@ -374,8 +350,16 @@ async function attemptReconnection(sessionId, maxRetries = 3, delay = 5000) {
         console.log(`[${sessionId}] محاولة إعادة الاتصال (${retryCount}/${maxRetries})...`);
 
         try {
-        const { Client } = require('whatsapp-web.js');
-        const client = new Client(getWhatsAppClientOptions(sessionId));
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        const path = require('path');
+        
+        const client = new Client({
+            authStrategy: new LocalAuth({
+                clientId: `session_${sessionId}`,
+                dataPath: path.join(__dirname, 'sessions')
+            }),
+            puppeteer: getPuppeteerOptions()
+        });
         
             activeClients.set(String(sessionId), client);
             
@@ -450,13 +434,11 @@ function setupClientEventHandlers(sessionId, client) {
         }
         });
         
-        client.on('auth_failure', async (msg) => {
+        client.on('auth_failure', (msg) => {
         console.log(`[${sessionId}] فشل التحقق من الهوية: ${msg}`);
-            db.prepare('UPDATE sessions SET status = ?, qr_code = NULL WHERE id = ?').run('auth_failure', sessionId);
+            const statusStmt = db.prepare('UPDATE sessions SET status = ? WHERE id = ?');
+            statusStmt.run('auth_failure', sessionId);
         io.emit('session_auth_failure', { sessionId, error: msg });
-        if (activeClients.has(String(sessionId))) {
-            try { await destroyClientCompletely(sessionId, client); } catch (_) {}
-        }
     });
 
     client.on('qr', async (qr) => {
@@ -470,8 +452,8 @@ function setupClientEventHandlers(sessionId, client) {
             const qrStmt = db.prepare('UPDATE sessions SET qr_code = ?, qr_timestamp = ? WHERE id = ?');
             qrStmt.run(qrCodeDataURL, qrTimestamp, sessionId);
             
-            // إرسال QR Code للواجهة (نفس اسم الحدث الذي يستمع له الداشبورد)
-            io.emit('qr_code', { 
+            // إرسال QR Code للواجهة
+            io.emit('session_qr', { 
                 sessionId: sessionId,
                 qrCode: qrCodeDataURL,
                 timestamp: qrTimestamp
@@ -507,8 +489,16 @@ async function restartConnectedSessions() {
         
         for (const session of connectedSessions) {
             try {
-                const { Client } = require('whatsapp-web.js');
-                const client = new Client(getWhatsAppClientOptions(session.id));
+                const { Client, LocalAuth } = require('whatsapp-web.js');
+                const path = require('path');
+                
+                const client = new Client({
+                    authStrategy: new LocalAuth({
+                        clientId: `session_${session.id}`,
+                        dataPath: path.join(__dirname, 'sessions')
+                    }),
+                    puppeteer: getPuppeteerOptions()
+                });
                 
                 activeClients.set(String(session.id), client);
                 
@@ -526,8 +516,8 @@ async function restartConnectedSessions() {
                         const qrStmt = db.prepare('UPDATE sessions SET qr_code = ? WHERE id = ?');
                         qrStmt.run(qrCodeDataURL, session.id);
                         
-                        // إرسال QR Code للواجهة (نفس اسم الحدث الذي يستمع له الداشبورد)
-                        io.emit('qr_code', { 
+                        // إرسال QR Code للواجهة
+                        io.emit('session_qr', { 
                             sessionId: session.id, 
                             sessionName: session.session_name,
                             qrCode: qrCodeDataURL 
@@ -601,8 +591,15 @@ async function restoreDisconnectedSessionsWithData() {
                     
                     if (shouldRestore && !activeClients.has(String(session.id))) {
                         try {
-                            const { Client } = require('whatsapp-web.js');
-                            const client = new Client(getWhatsAppClientOptions(session.id));
+                            const { Client, LocalAuth } = require('whatsapp-web.js');
+                            
+                            const client = new Client({
+                                authStrategy: new LocalAuth({
+                                    clientId: `session_${session.id}`,
+                                    dataPath: path.join(__dirname, 'sessions')
+                                }),
+                                puppeteer: getPuppeteerOptions()
+                            });
                             
                             activeClients.set(String(session.id), client);
                             
@@ -2107,8 +2104,14 @@ io.on('connection', (socket) => {
                 updateStmt.run('waiting_for_qr', sessionId);
             }
             
-            // Create WhatsApp client (خيارات مقاومة للـ auth timeout و ProtocolError)
-            const client = new Client(getWhatsAppClientOptions(sessionId));
+            // Create WhatsApp client
+            const client = new Client({
+                authStrategy: new LocalAuth({
+                    clientId: `session_${sessionId}`,
+                    dataPath: path.join(__dirname, 'sessions')
+                }),
+                puppeteer: getPuppeteerOptions()
+            });
             
             activeClients.set(String(sessionId), client);
             
@@ -2299,20 +2302,7 @@ io.on('connection', (socket) => {
                 });
             }
 
-            // await مع معالجة أخطاء المصادقة وبروتوكول Puppeteer
-            try {
-                await client.initialize();
-            } catch (initErr) {
-                const msg = initErr && initErr.message ? initErr.message : String(initErr);
-                const isAuthOrProtocol = /auth timeout|ProtocolError|Execution context was destroyed|getResponseBody|ERR_TIMED_OUT/i.test(msg);
-                console.error(`[${sessionId}] فشل تهيئة الجلسة:`, msg);
-                if (activeClients.has(String(sessionId))) {
-                    try { await destroyClientCompletely(sessionId, client); } catch (_) {}
-                }
-                db.prepare('UPDATE sessions SET status = ?, qr_code = NULL WHERE id = ?').run(isAuthOrProtocol ? 'auth_failure' : 'disconnected', sessionId);
-                socket.emit(isAuthOrProtocol ? 'session_auth_failure' : 'session_disconnected', { sessionId, error: msg });
-                socket.emit('session_error', { error: msg });
-            }
+            client.initialize();
             
         } catch (error) {
             console.error('Session start error:', error);
@@ -2360,8 +2350,14 @@ io.on('connection', (socket) => {
             if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
                 console.log(`Restarting inactive session ${sessionId}`);
                 
-                // Create WhatsApp client (خيارات مقاومة للـ timeout)
-                const client = new Client(getWhatsAppClientOptions(sessionId));
+                // Create WhatsApp client
+                const client = new Client({
+                    authStrategy: new LocalAuth({
+                        clientId: `session_${sessionId}`,
+                        dataPath: path.join(__dirname, 'sessions')
+                    }),
+                    puppeteer: getPuppeteerOptions()
+                });
                 
                 activeClients.set(String(sessionId), client);
                 
@@ -2484,7 +2480,15 @@ io.on('connection', (socket) => {
             if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
                 console.log(`Restarting inactive session ${sessionId} for message sending`);
                 
-                const client = new Client(getWhatsAppClientOptions(sessionId));
+                // Create WhatsApp client
+                const client = new Client({
+                    authStrategy: new LocalAuth({
+                        clientId: `session_${sessionId}`,
+                        dataPath: path.join(__dirname, 'sessions')
+                    }),
+                    puppeteer: getPuppeteerOptions()
+                });
+                
                 activeClients.set(String(sessionId), client);
                 
                 // Wait for client to be ready
@@ -2587,7 +2591,15 @@ io.on('connection', (socket) => {
             if (!activeClients.has(String(sessionId)) && session.status === 'connected') {
                 console.log(`Restarting inactive session ${sessionId} for file sending`);
                 
-                const client = new Client(getWhatsAppClientOptions(sessionId));
+                // Create WhatsApp client
+                const client = new Client({
+                    authStrategy: new LocalAuth({
+                        clientId: `session_${sessionId}`,
+                        dataPath: path.join(__dirname, 'sessions')
+                    }),
+                    puppeteer: getPuppeteerOptions()
+                });
+                
                 activeClients.set(String(sessionId), client);
                 
                 // Wait for client to be ready

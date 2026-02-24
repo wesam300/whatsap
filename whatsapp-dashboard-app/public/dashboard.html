@@ -1325,23 +1325,12 @@
             loadSessions();
             initializeSocket();
             bootstrapUser();
-            // تحديث تلقائي كل 4 ثوانٍ لعرض رمز QR وحالة الجلسات دون الحاجة للـ refresh
-            if (sessionPollInterval) clearInterval(sessionPollInterval);
-            sessionPollInterval = setInterval(function() {
-                loadSessions(true);
-            }, 4000);
         });
-
-        let sessionPollInterval = null;
 
         function initializeSocket() {
             socket = io();
             
             socket.on('qr_code', function(data) {
-                updateSessionQR(data.sessionId, data.qrCode);
-            });
-            // دعم الاسم القديم للحدث من السيرفر
-            socket.on('session_qr', function(data) {
                 updateSessionQR(data.sessionId, data.qrCode);
             });
             
@@ -1454,27 +1443,24 @@
             });
         }
 
-        /** تحديث قائمة الجلسات. إذا silent=true فلا نعرض رسالة خطأ عند الفشل (مفيد للتحديث التلقائي). */
-        async function loadSessions(silent = false) {
+        async function loadSessions() {
             try {
                 const response = await fetch('/api/sessions');
                 if (response.ok) {
                     sessions = await response.json();
                     renderSessions();
-                    if (!silent) checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
+                    checkExpiryWarnings(); // فحص تحذيرات انتهاء الصلاحية
                 } else {
-                    if (!silent) throw new Error('Failed to load sessions');
+                    throw new Error('Failed to load sessions');
                 }
             } catch (error) {
-                if (!silent) {
-                    console.error('Error loading sessions:', error);
-                    document.getElementById('sessionsContainer').innerHTML = `
-                        <div class="empty-state">
-                            <h3>خطأ في تحميل الجلسات</h3>
-                            <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
-                        </div>
-                    `;
-                }
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessionsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <h3>خطأ في تحميل الجلسات</h3>
+                        <p>فشل في تحميل جلسات واتساب. يرجى إعادة تحميل الصفحة.</p>
+                    </div>
+                `;
             }
         }
 
