@@ -254,7 +254,9 @@ async function cleanupSessionFolder(sessionId) {
         const cookieFile = path.join(sessionPath, 'SingletonCookie');
         try {
             await killChromeProcessesForSession(sessionId);
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(resolve => setTimeout(resolve, 1200));
         } catch (killError) {
             console.warn(`[${sessionId}] تحذير في قتل العمليات:`, killError.message);
         }
@@ -287,8 +289,7 @@ async function cleanupSessionFolder(sessionId) {
         } catch (e) {
             if (e.code !== 'ENOENT') { }
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
+        await new Promise(resolve => setTimeout(resolve, 1500));
         return true;
     } catch (error) {
         console.error(`[${sessionId}] خطأ في تنظيف مجلد الجلسة:`, error.message);
@@ -1077,11 +1078,23 @@ app.delete('/api/admin/sessions/:id', requireAuth, requireAdmin, async (req, res
         if (activeClients.has(String(sessionId))) {
             const client = activeClients.get(String(sessionId));
             await destroyClientCompletely(sessionId, client);
+            await new Promise(r => setTimeout(r, 2000));
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(r => setTimeout(r, 2000));
+        } else {
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(r => setTimeout(r, 1000));
         }
 
         const result = db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
 
         if (result.changes > 0) {
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(r => setTimeout(r, 1000));
+            const sessionPath = path.join(__dirname, 'sessions', `session-session_${sessionId}`);
+            try {
+                await fs.rm(sessionPath, { recursive: true, force: true, maxRetries: 5 });
+            } catch (_) { }
             res.json({ success: true, message: 'تم حذف الجلسة بنجاح' });
         } else {
             res.status(404).json({ success: false, error: 'الجلسة غير موجودة' });
@@ -1902,16 +1915,19 @@ app.delete('/api/sessions/:id', requireAuth, async (req, res) => {
         if (activeClients.has(String(sessionId))) {
             const client = activeClients.get(String(sessionId));
             await destroyClientCompletely(sessionId, client);
+            await new Promise(r => setTimeout(r, 2000));
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(r => setTimeout(r, 2000));
         }
 
         const stmt = db.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?');
         const result = stmt.run(sessionId, userId);
 
         if (result.changes > 0) {
+            await killChromeProcessesForSession(sessionId);
+            await new Promise(r => setTimeout(r, 1500));
             await deleteSessionFolder(sessionId);
-
             deleteSessionTokenBySessionId(userId, String(sessionId));
-
             res.json({ success: true, message: 'تم حذف الجلسة ومجلدها بنجاح' });
         } else {
             res.status(404).json({ error: 'Session not found' });
@@ -2008,7 +2024,7 @@ io.on('connection', (socket) => {
             }
 
             await cleanupSessionFolder(sessionId);
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 3500));
 
             const client = createWhatsAppClient(sessionId);
 

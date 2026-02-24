@@ -40,12 +40,14 @@ export SESSION_SECRET="سري-قوي-وفريد-للسيرفر"
 SESSION_SECRET=your-secret pm2 start server.js --name whatsapp-dashboard
 ```
 
-## 3. قتل أي متصفحات قديمة عالقة (مهم قبل أول تشغيل بعد التحديث)
+## 3. قتل أي متصفحات قديمة عالقة (مهم قبل أول تشغيل بعد التحديث وعند ظهور "browser is already running")
 
 ```bash
 pkill -f "session-session_" || true
-sleep 2
+sleep 3
 ```
+
+إذا حذفت جلسة ثم أنشأت جلسة جديدة وظهر "browser is already running"، نفّذ الأمر أعلاه ثم أعد تشغيل PM2 ثم جرّب بدء الجلسة مرة أخرى.
 
 ## 4. إعادة تشغيل التطبيق
 
