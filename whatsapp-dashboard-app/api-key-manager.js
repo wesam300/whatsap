@@ -221,20 +221,26 @@ function validateSessionToken(token) {
 // ========================================
 
 function logApiRequest(userId, apiKeyId, sessionTokenId, endpoint, method, statusCode, responseTime, ipAddress, userAgent) {
-    const insertWith = (uid, akId, stId) => {
-        db.prepare(`
+    try {
+        const stmt = db.prepare(`
             INSERT INTO api_logs (user_id, api_key_id, session_token_id, endpoint, method, status_code, response_time, ip_address, user_agent)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(uid, akId ?? null, stId ?? null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
-    };
-    try {
-        insertWith(userId, apiKeyId, sessionTokenId);
+        `);
+        stmt.run(userId, apiKeyId, sessionTokenId, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
     } catch (error) {
         if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
             try {
-                insertWith(userId, null, null);
+                const fallback = db.prepare(`
+                    INSERT INTO api_logs (user_id, api_key_id, session_token_id, endpoint, method, status_code, response_time, ip_address, user_agent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+                fallback.run(userId, apiKeyId, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
             } catch (e2) {
-                console.error('Error logging API request (fallback):', e2.message);
+                try {
+                    fallback.run(userId, null, null, endpoint, method, statusCode, responseTime, ipAddress, userAgent);
+                } catch (e3) {
+                    console.error('Error logging API request:', e3.message);
+                }
             }
         } else {
             console.error('Error logging API request:', error.message);

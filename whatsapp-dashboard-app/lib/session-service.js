@@ -273,12 +273,7 @@ class SessionService {
                     .run(qrCodeDataURL, qrTimestamp, 'waiting_for_qr', sessionId);
                 this.io.emit('qr_code', { sessionId, qrCode: qrCodeDataURL, timestamp: qrTimestamp });
             } catch (e) {
-                const msg = e.message || '';
-                if (msg.includes('readonly') || msg.includes('SQLITE_READONLY')) {
-                    console.error(`[${sessionId}] QR: لا يمكن حفظ الكود (قاعدة البيانات للقراءة فقط). تحقق من صلاحيات مجلد التطبيق وقاعدة البيانات على السيرفر.`);
-                } else {
-                    console.error(`[${sessionId}] QR:`, msg);
-                }
+                console.error(`[${sessionId}] QR:`, e.message);
             }
         });
         client.on('loading_screen', (percent, message) => {

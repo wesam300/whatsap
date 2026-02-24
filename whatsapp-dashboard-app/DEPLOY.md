@@ -8,9 +8,7 @@
 
 - `server.js`
 - `api-routes.js`
-- `api-key-manager.js`
 - `session-manager.js`
-- `lib/session-service.js`
 
 يمكنك استخدام SCP أو SFTP أو Git:
 
@@ -42,26 +40,7 @@ export SESSION_SECRET="سري-قوي-وفريد-للسيرفر"
 SESSION_SECRET=your-secret pm2 start server.js --name whatsapp-dashboard
 ```
 
-## 3. صلاحيات الكتابة (مهم: عدم تحديث QR أو الحالة = "readonly database")
-
-إذا ظهر في السجلات `attempt to write a readonly database` أو `QR: attempt to write a readonly database` أو لا يتحدث رمز QR ولا حالة الجلسة:
-
-- المستخدم الذي يشغّل التطبيق (مثلاً `root` أو `www-data`) يجب أن يملك صلاحية **الكتابة** على مجلد التطبيق وخاصة:
-  - مجلد `sessions/` (وفيه قاعدة البيانات `whatsapp_dashboard.db` ومجلدات الجلسات)
-- نفّذ على السيرفر (عدّل المسار والمستخدم حسب إعدادك):
-
-```bash
-# مثال: التطبيق في /var/www/whatsap/whatsapp-dashboard-app
-cd /var/www/whatsap
-chown -R root:root whatsapp-dashboard-app/sessions
-chmod -R 755 whatsapp-dashboard-app/sessions
-# إذا التطبيق يعمل تحت www-data:
-# chown -R www-data:www-data whatsapp-dashboard-app/sessions
-```
-
-ثم أعد تشغيل PM2. بعدها يجب أن يُحفظ QR والحالة بشكل طبيعي.
-
-## 4. قتل أي متصفحات قديمة عالقة (مهم قبل أول تشغيل بعد التحديث وعند ظهور "browser is already running")
+## 3. قتل أي متصفحات قديمة عالقة (مهم قبل أول تشغيل بعد التحديث وعند ظهور "browser is already running")
 
 ```bash
 pkill -f "session-session_" || true
@@ -70,7 +49,7 @@ sleep 3
 
 إذا حذفت جلسة ثم أنشأت جلسة جديدة وظهر "browser is already running"، نفّذ الأمر أعلاه ثم أعد تشغيل PM2 ثم جرّب بدء الجلسة مرة أخرى.
 
-## 5. إعادة تشغيل التطبيق
+## 4. إعادة تشغيل التطبيق
 
 ```bash
 cd /var/www/whatsap/whatsapp-dashboard-app
@@ -80,7 +59,7 @@ pm2 delete whatsapp-dashboard
 pm2 start server.js --name whatsapp-dashboard
 ```
 
-## 6. التحقق من السجلات
+## 5. التحقق من السجلات
 
 ```bash
 pm2 logs whatsapp-dashboard --lines 50
@@ -103,7 +82,5 @@ pm2 logs whatsapp-dashboard --lines 50
 | انتهت مهلة الإرسال | رفع المهلة إلى 45 ثانية في api-routes |
 | autoRestartSession فشل | استخدام killChromeProcessesForSession وحذف ملفات القفل و authTimeoutMs في api-routes |
 | SESSION_NOT_FOUND والجلسة ظاهرة authenticated | عند بدء التشغيل نستعيد أيضاً الجلسات ذات الحالة `authenticated` (لم تصل بعد لـ ready) حتى تصبح متصلة ويمكن الإرسال منها |
-| FOREIGN KEY في api_logs | عند فشل تسجيل الطلب نُدخل السجل بـ api_key_id و session_token_id = null |
-| QR / الحالة لا تتحدث (readonly database) | تحقق من صلاحيات مجلد `sessions/` وقاعدة البيانات (قسم 3 أعلاه) |
 
 بعد النشر: `git pull` ثم إعادة تشغيل PM2 (ويفضل قتل عمليات Chrome العالقة قبلها كما في القسم 3).
